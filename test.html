@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试页面 - Electron Browser AI</title>
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+        
+        .feature-card {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            transition: transform 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .feature-icon {
+            font-size: 3em;
+            margin-bottom: 15px;
+            display: block;
+        }
+        
+        .feature-title {
+            font-size: 1.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .feature-desc {
+            font-size: 0.9em;
+            opacity: 0.9;
+            line-height: 1.5;
+        }
+        
+        .demo-section {
+            margin: 40px 0;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        .demo-title {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        
+        input, textarea, select {
+            width: 100%;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            font-size: 14px;
+        }
+        
+        button {
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s ease;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background: #ff5252;
+        }
+        
+        .button-group {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .info-box {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #4ecdc4;
+        }
+        
+        .warning-box {
+            background: rgba(255, 193, 7, 0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #ffc107;
+        }
+        
+        .code-block {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            margin: 10px 0;
+            overflow-x: auto;
+        }
+        
+        .navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        
+        .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin: 0 10px;
+            padding: 8px 16px;
+            border-radius: 5px;
+            transition: background 0.3s ease;
+        }
+        
+        .nav-links a:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="navigation">
+            <div class="logo">🤖 Electron Browser AI</div>
+            <div class="nav-links">
+                <a href="#features">功能</a>
+                <a href="#demo">演示</a>
+                <a href="#about">关于</a>
+            </div>
+        </div>
+        
+        <h1>欢迎使用 Electron Browser AI</h1>
+        
+        <div class="info-box">
+            <strong>📝 使用说明：</strong> 这是一个测试页面，用于演示 Electron Browser AI 的功能。点击右下角的"生成说明"按钮，AI将自动分析此页面并生成详细的使用说明。
+        </div>
+        
+        <div id="features" class="feature-grid">
+            <div class="feature-card">
+                <span class="feature-icon">🔍</span>
+                <div class="feature-title">智能分析</div>
+                <div class="feature-desc">自动提取页面HTML、CSS、JavaScript代码，深度分析页面结构和功能</div>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">📸</span>
+                <div class="feature-title">自动截图</div>
+                <div class="feature-desc">捕获完整页面截图，为AI分析提供视觉上下文</div>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">🤖</span>
+                <div class="feature-title">AI生成说明</div>
+                <div class="feature-desc">利用大语言模型生成详细、易懂的页面使用说明</div>
+            </div>
+            
+            <div class="feature-card">
+                <span class="feature-icon">⚡</span>
+                <div class="feature-title">自动化操作</div>
+                <div class="feature-desc">支持Windows系统级自动化操作，实现智能交互</div>
+            </div>
+        </div>
+        
+        <div id="demo" class="demo-section">
+            <div class="demo-title">📋 演示表单</div>
+            
+            <form id="demoForm">
+                <div class="form-group">
+                    <label for="username">用户名：</label>
+                    <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">邮箱：</label>
+                    <input type="email" id="email" name="email" placeholder="请输入邮箱地址" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="category">分类：</label>
+                    <select id="category" name="category">
+                        <option value="general">一般咨询</option>
+                        <option value="technical">技术支持</option>
+                        <option value="feedback">意见反馈</option>
+                        <option value="bug">错误报告</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="message">消息内容：</label>
+                    <textarea id="message" name="message" rows="4" placeholder="请输入您的消息内容..."></textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button type="submit">提交表单</button>
+                    <button type="reset">重置表单</button>
+                    <button type="button" onclick="showAlert()">显示提示</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="warning-box">
+            <strong>⚠️ 注意：</strong> 这是一个演示页面，表单提交不会实际发送数据。此页面主要用于测试AI分析功能。
+        </div>
+        
+        <div id="about" class="demo-section">
+            <div class="demo-title">🔧 技术特性</div>
+            
+            <div class="code-block">
+                // JavaScript 示例代码
+                function generateDocumentation() {
+                    console.log('开始生成页面使用说明...');
+                    // AI分析逻辑
+                }
+            </div>
+            
+            <ul style="line-height: 2;">
+                <li>基于 Electron 框架开发</li>
+                <li>集成大语言模型API</li>
+                <li>支持页面内容自动提取</li>
+                <li>智能截图功能</li>
+                <li>Windows系统自动化支持</li>
+                <li>现代化用户界面设计</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // 演示JavaScript功能
+        document.getElementById('demoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            alert('表单提交成功！（这只是演示）');
+        });
+        
+        function showAlert() {
+            alert('这是一个演示提示框！');
+        }
+        
+        // 页面加载完成后的初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('测试页面加载完成');
+            
+            // 添加一些动态效果
+            const cards = document.querySelectorAll('.feature-card');
+            cards.forEach((card, index) => {
+                card.style.animationDelay = `${index * 0.1}s`;
+            });
+        });
+        
+        // 模拟一些页面交互
+        setInterval(() => {
+            const timestamp = new Date().toLocaleTimeString();
+            console.log(`页面活跃时间: ${timestamp}`);
+        }, 5000);
+    </script>
+</body>
+</html>

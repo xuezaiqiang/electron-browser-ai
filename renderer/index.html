@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Electron Browser AI</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="floating-button/button.css">
+</head>
+<body>
+    <!-- 主要内容区域 -->
+    <div id="main-container">
+        <!-- 顶部工具栏 -->
+        <div id="toolbar">
+            <div class="toolbar-section">
+                <h1>Electron Browser AI</h1>
+                <p>智能浏览器助手 - 自动生成页面使用说明</p>
+            </div>
+            
+            <div class="toolbar-section">
+                <button id="debug-btn" class="toolbar-btn">🔍 调试</button>
+                <button id="settings-btn" class="toolbar-btn">设置</button>
+                <button id="help-btn" class="toolbar-btn">帮助</button>
+            </div>
+        </div>
+
+        <!-- 浏览器区域 -->
+        <div id="browser-container">
+            <div id="address-bar">
+                <input type="url" id="url-input" placeholder="输入网址或搜索内容..." value="https://www.baidu.com">
+                <button id="go-btn">访问</button>
+                <button id="refresh-btn">刷新</button>
+            </div>
+            
+            <div id="browser-content">
+                <webview id="webview"
+                         src="https://www.baidu.com"
+                         style="width: 100%; height: 100%;"
+                         nodeintegration="false"
+                         webpreferences="contextIsolation=true,webSecurity=false"
+                         allowpopups>
+                </webview>
+            </div>
+        </div>
+
+        <!-- 状态栏 -->
+        <div id="status-bar">
+            <span id="status-text">就绪</span>
+            <span id="ai-status">AI: 未连接</span>
+            <span id="mcp-status">MCP: 检查中...</span>
+        </div>
+    </div>
+
+    <!-- 悬浮按钮 -->
+    <div id="floating-button" class="floating-btn">
+        <span class="btn-icon">🤖</span>
+        <span class="btn-text">生成说明</span>
+    </div>
+
+    <!-- 设置面板 -->
+    <div id="settings-panel" class="panel hidden">
+        <div class="panel-header">
+            <h3>设置</h3>
+            <button id="close-settings" class="close-btn">&times;</button>
+        </div>
+        
+        <div class="panel-content">
+            <div class="setting-group">
+                <h4>AI模型配置</h4>
+
+                <label for="api-type">API类型:</label>
+                <select id="api-type">
+                    <option value="doubao">豆包 (推荐)</option>
+                    <option value="ollama">Ollama</option>
+                    <option value="openai">OpenAI</option>
+                </select>
+
+                <label for="model-url">模型服务地址:</label>
+                <input type="text" id="model-url" value="https://ark.cn-beijing.volces.com/api/v3" placeholder="https://ark.cn-beijing.volces.com/api/v3">
+
+                <label for="api-key">API密钥:</label>
+                <input type="password" id="api-key" value="0bf1c076-b6e9-479a-9c55-051813ad5e4a" placeholder="请输入API密钥">
+
+                <label for="model-name">模型名称:</label>
+                <select id="model-name">
+                    <option value="doubao-seed-1-6-250615">豆包-Seed-1.6 (支持图片分析，推荐)</option>
+                    <option value="doubao-1-5-thinking-pro-250415">豆包-1.5-thinking-pro</option>
+                    <option value="llama2">Llama 2</option>
+                    <option value="codellama">Code Llama</option>
+                    <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                    <option value="gpt-4">GPT-4</option>
+                    <option value="gpt-4-vision-preview">GPT-4 Vision</option>
+                </select>
+
+                <button id="test-connection">测试连接</button>
+                <span id="connection-status"></span>
+            </div>
+            
+            <div class="setting-group">
+                <h4>功能选项</h4>
+                <label>
+                    <input type="checkbox" id="auto-screenshot" checked>
+                    自动截图
+                </label>
+                <label>
+                    <input type="checkbox" id="include-css" checked>
+                    包含CSS样式
+                </label>
+                <label>
+                    <input type="checkbox" id="include-js" checked>
+                    包含JavaScript代码
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- 文档显示面板 -->
+    <div id="documentation-panel" class="panel hidden">
+        <div class="panel-header">
+            <h3>页面使用说明</h3>
+            <div class="panel-actions">
+                <button id="save-doc" class="action-btn">保存</button>
+                <button id="copy-doc" class="action-btn">复制</button>
+                <button id="close-doc" class="close-btn">&times;</button>
+            </div>
+        </div>
+        
+        <div class="panel-content">
+            <div id="documentation-content">
+                <div class="loading hidden" id="doc-loading">
+                    <div class="spinner"></div>
+                    <p>AI正在分析页面内容，请稍候...</p>
+                </div>
+                <div id="doc-text"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 帮助面板 -->
+    <div id="help-panel" class="panel hidden">
+        <div class="panel-header">
+            <h3>使用帮助</h3>
+            <button id="close-help" class="close-btn">&times;</button>
+        </div>
+        
+        <div class="panel-content">
+            <div class="help-content">
+                <h4>如何使用</h4>
+                <ol>
+                    <li>在地址栏输入要访问的网址</li>
+                    <li>点击右下角的"生成说明"按钮</li>
+                    <li>AI将自动分析页面内容并生成使用说明</li>
+                    <li>可以保存或复制生成的说明</li>
+                </ol>
+                
+                <h4>功能特性</h4>
+                <ul>
+                    <li>自动提取页面HTML、CSS、JavaScript代码</li>
+                    <li>智能截图功能</li>
+                    <li>AI驱动的使用说明生成</li>
+                    <li>支持Windows自动化操作（MCP）</li>
+                </ul>
+                
+                <h4>系统要求</h4>
+                <ul>
+                    <li>Windows 10/11</li>
+                    <li>本地AI模型服务（如Ollama）</li>
+                    <li>网络连接</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- 调试面板 -->
+    <div id="debug-panel" class="panel hidden">
+        <div class="panel-header">
+            <h3>🔍 AI调试信息</h3>
+            <div class="panel-actions">
+                <button id="clear-debug" class="action-btn">清空</button>
+                <button id="export-debug" class="action-btn">导出</button>
+                <button id="close-debug" class="close-btn">&times;</button>
+            </div>
+        </div>
+
+        <div class="panel-content">
+            <div id="debug-content">
+                <div class="debug-section">
+                    <h4>📤 请求信息</h4>
+                    <div id="debug-request" class="debug-info">
+                        <div class="debug-placeholder">等待API请求...</div>
+                    </div>
+                </div>
+
+                <div class="debug-section">
+                    <h4>📥 响应信息</h4>
+                    <div id="debug-response" class="debug-info">
+                        <div class="debug-placeholder">等待API响应...</div>
+                    </div>
+                </div>
+
+                <div class="debug-section">
+                    <h4>📊 统计信息</h4>
+                    <div id="debug-stats" class="debug-info">
+                        <div class="debug-placeholder">等待统计数据...</div>
+                    </div>
+                </div>
+
+                <div class="debug-section">
+                    <h4>📝 调试日志</h4>
+                    <div id="debug-logs" class="debug-logs">
+                        <div class="debug-placeholder">等待调试日志...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知容器 -->
+    <div id="notifications"></div>
+
+    <!-- 脚本文件 -->
+    <script src="index.js"></script>
+    <script src="floating-button/button.js"></script>
+    <script src="utils/extract.js"></script>
+    <script src="utils/capture.js"></script>
+    <script src="utils/display.js"></script>
+    <script src="utils/debug.js"></script>
+</body>
+</html>

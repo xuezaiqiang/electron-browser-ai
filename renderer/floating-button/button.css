@@ -1,0 +1,293 @@
+/* 悬浮按钮样式 */
+.floating-btn {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1000;
+    user-select: none;
+    border: none;
+    overflow: hidden;
+}
+
+.floating-btn:hover {
+    transform: translateY(-2px) scale(1.05);
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+.floating-btn:active {
+    transform: translateY(0) scale(0.95);
+    box-shadow: 0 2px 10px rgba(102, 126, 234, 0.4);
+}
+
+.floating-btn .btn-icon {
+    font-size: 24px;
+    margin-bottom: 2px;
+    transition: transform 0.3s ease;
+}
+
+.floating-btn .btn-text {
+    font-size: 8px;
+    color: white;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
+.floating-btn:hover .btn-icon {
+    transform: scale(1.1);
+}
+
+.floating-btn:hover .btn-text {
+    opacity: 1;
+}
+
+/* 加载状态 */
+.floating-btn.loading {
+    pointer-events: none;
+}
+
+.floating-btn.loading .btn-icon {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.7;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+/* 成功状态 */
+.floating-btn.success {
+    background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+    animation: successPulse 0.6s ease;
+}
+
+@keyframes successPulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.1);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* 错误状态 */
+.floating-btn.error {
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    animation: errorShake 0.6s ease;
+}
+
+@keyframes errorShake {
+    0%, 100% {
+        transform: translateX(0);
+    }
+    25% {
+        transform: translateX(-5px);
+    }
+    75% {
+        transform: translateX(5px);
+    }
+}
+
+/* 展开状态 */
+.floating-btn.expanded {
+    width: 120px;
+    height: 40px;
+    border-radius: 20px;
+    flex-direction: row;
+    gap: 8px;
+}
+
+.floating-btn.expanded .btn-icon {
+    font-size: 18px;
+    margin-bottom: 0;
+}
+
+.floating-btn.expanded .btn-text {
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+/* 工具提示 */
+.floating-btn::before {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    right: 0;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 1001;
+}
+
+.floating-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 100%;
+    right: 20px;
+    width: 0;
+    height: 0;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 5px solid rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(10px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+    z-index: 1001;
+}
+
+.floating-btn:hover::before,
+.floating-btn:hover::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+/* 进度环 */
+.floating-btn .progress-ring {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 64px;
+    height: 64px;
+    transform: rotate(-90deg);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.floating-btn.loading .progress-ring {
+    opacity: 1;
+}
+
+.floating-btn .progress-ring circle {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.3);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-dasharray: 188.5;
+    stroke-dashoffset: 188.5;
+    animation: progress 2s linear infinite;
+}
+
+@keyframes progress {
+    0% {
+        stroke-dashoffset: 188.5;
+    }
+    50% {
+        stroke-dashoffset: 94.25;
+    }
+    100% {
+        stroke-dashoffset: 0;
+    }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .floating-btn {
+        bottom: 20px;
+        right: 20px;
+        width: 50px;
+        height: 50px;
+    }
+    
+    .floating-btn .btn-icon {
+        font-size: 20px;
+    }
+    
+    .floating-btn .btn-text {
+        font-size: 7px;
+    }
+    
+    .floating-btn.expanded {
+        width: 100px;
+        height: 35px;
+        border-radius: 17.5px;
+    }
+    
+    .floating-btn.expanded .btn-icon {
+        font-size: 16px;
+    }
+    
+    .floating-btn.expanded .btn-text {
+        font-size: 10px;
+    }
+}
+
+/* 无障碍支持 */
+.floating-btn:focus {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+}
+
+.floating-btn:focus:not(:focus-visible) {
+    outline: none;
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+    .floating-btn {
+        border: 2px solid #fff;
+    }
+    
+    .floating-btn .btn-text {
+        font-weight: 700;
+    }
+}
+
+/* 减少动画模式支持 */
+@media (prefers-reduced-motion: reduce) {
+    .floating-btn,
+    .floating-btn .btn-icon,
+    .floating-btn .btn-text,
+    .floating-btn::before,
+    .floating-btn::after {
+        transition: none;
+    }
+    
+    .floating-btn .btn-icon {
+        animation: none;
+    }
+    
+    .floating-btn.loading .btn-icon {
+        animation: none;
+    }
+    
+    .floating-btn .progress-ring circle {
+        animation: none;
+    }
+}
