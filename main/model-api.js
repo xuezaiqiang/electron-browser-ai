@@ -46,74 +46,87 @@ class ModelAPI {
         }
     }
 
-    // 构建发送给AI的提示词
+    // 构建发送给AI的提示词 - 主要基于截图分析
     buildPrompt(pageData) {
-        const { html, css, scripts, screenshot } = pageData;
+        const { screenshot } = pageData;
 
-        let prompt = `请分析以下网页内容并生成详细的使用说明：
+        let prompt = `请分析以下网页并生成详细的使用说明：
 
 ## 网页基本信息：
 - 页面标题：${pageData.title || '未知'}
 - 页面URL：${pageData.url || '未知'}
+- 页面描述：${pageData.metadata?.description || '无'}`;
 
-## 网页HTML结构：
-\`\`\`html
-${this.truncateText(html, 3000)}
-\`\`\`
-
-## CSS样式：
-\`\`\`css
-${this.truncateText(css, 1500)}
-\`\`\`
-
-## JavaScript代码：
-\`\`\`javascript
-${this.truncateText(scripts, 1500)}
-\`\`\``;
-
-        // 如果有截图且支持视觉分析，添加图片分析说明
+        // 如果有截图且支持视觉分析，强调基于截图的分析
         if (screenshot && this.config.supportsVision) {
             prompt += `
 
-## 页面截图分析：
-我已经为您提供了页面的实际截图，请结合截图中的视觉元素进行分析。请特别关注：
-- 页面的整体布局和设计风格
-- 可见的按钮、链接、表单等交互元素
-- 图片、图标等视觉元素
-- 页面的色彩搭配和视觉层次
-- 用户界面的友好程度`;
+## 📸 页面截图分析（主要分析方式）：
+我已经为您提供了页面的完整截图，请主要基于截图进行分析。请重点关注：
+
+### 视觉布局分析
+- 页面的整体布局结构和设计风格
+- 主要内容区域的划分和层次
+- 导航栏、侧边栏、主内容区的布局
+
+### 交互元素识别
+- 所有可见的按钮、链接、表单元素
+- 菜单、下拉框、输入框等交互组件
+- 图标、标签、提示信息等引导元素
+
+### 视觉设计评估
+- 色彩搭配和视觉层次
+- 字体大小和可读性
+- 图片、图标的使用效果
+- 整体的用户界面友好程度
+
+### 功能区域识别
+- 主要功能模块的位置和作用
+- 搜索、登录、购物车等常见功能
+- 内容展示区域和操作区域的分布`;
+        } else {
+            prompt += `
+
+## 📝 基本信息分析：
+由于截图功能暂时不可用，将基于页面的基本信息进行分析。`;
         }
 
         prompt += `
 
-请根据以上信息${screenshot && this.config.supportsVision ? '（包括代码和截图）' : ''}生成一份详细的网页使用说明，包括：
+请根据${screenshot && this.config.supportsVision ? '截图' : '基本信息'}生成一份详细的网页使用说明，包括：
 
-1. **页面概述**
-   - 网站/页面的主要用途和目标用户
-   - 整体设计风格和特点
+## 1. 🎯 页面概述
+- 网站/页面的主要用途和目标用户
+- 页面类型（如：电商、新闻、工具、社交等）
+- 整体设计风格和特点
 
-2. **功能模块分析**
-   - 主要功能区域的识别和说明
-   - 各个界面元素的作用和功能
+## 2. 🔧 功能模块说明
+- 主要功能区域的识别和详细说明
+- 各个界面元素的具体作用和功能
+- 重要按钮和链接的位置和用途
 
-3. **操作指南**
-   - 详细的使用步骤和操作流程
-   - 常见操作的具体方法
+## 3. 📋 操作指南
+- 详细的使用步骤和操作流程
+- 常见任务的具体操作方法
+- 从进入页面到完成目标的完整路径
 
-4. **交互说明**
-   - 可点击的元素和链接
-   - 表单填写和提交方式
-   - 导航和页面跳转逻辑
+## 4. 🖱️ 交互说明
+- 所有可点击元素的说明
+- 表单填写和提交的详细步骤
+- 导航方式和页面跳转逻辑
+- 快捷键或特殊操作方式
 
-5. **注意事项**
-   - 使用过程中的注意点
-   - 可能遇到的问题和解决方法
+## 5. ⚠️ 注意事项
+- 使用过程中需要注意的要点
+- 可能遇到的问题和解决方法
+- 安全性和隐私相关的提醒
 
-6. **用户体验评价**
-   - 页面的易用性分析
-   - 改进建议（如有）
+## 6. 💡 用户体验评价
+- 页面易用性的客观评价
+- 设计优点和可能的改进建议
+- 对不同用户群体的适用性分析
 
-请用中文回答，格式清晰，内容详实易懂。`;
+请用中文回答，格式清晰美观，内容详实易懂，重点突出实用性。`;
 
         return prompt;
     }
@@ -135,11 +148,29 @@ ${this.truncateText(scripts, 1500)}
                     headers: headers
                 });
 
+                console.log('Sending request to:', `${this.config.baseURL}${endpoint}`);
+                console.log('Request data size:', JSON.stringify(requestData).length, 'characters');
+
                 const response = await this.currentRequest.post(endpoint, requestData);
+                console.log('Response received:', response.status);
                 return response.data;
             } catch (error) {
                 lastError = error;
-                console.warn(`Request attempt ${i + 1} failed:`, error.message);
+                console.error(`Request attempt ${i + 1} failed:`);
+                console.error('Status:', error.response?.status);
+                console.error('Status text:', error.response?.statusText);
+                console.error('Response data:', error.response?.data);
+
+                if (error.response?.status === 400) {
+                    console.error('Bad Request (400) - 请求格式可能有问题');
+                    if (error.response?.data?.error) {
+                        console.error('Error details:', error.response.data.error);
+                    }
+                } else if (error.response?.status === 401) {
+                    console.error('Unauthorized (401) - API密钥可能无效');
+                } else if (error.response?.status === 403) {
+                    console.error('Forbidden (403) - 访问被拒绝');
+                }
 
                 if (i < this.config.maxRetries - 1) {
                     // 等待一段时间后重试
@@ -148,44 +179,82 @@ ${this.truncateText(scripts, 1500)}
             }
         }
 
-        throw lastError;
+        // 构建详细的错误信息
+        let errorMessage = 'AI模型请求失败';
+        if (lastError.response?.status === 400) {
+            errorMessage += ': 请求格式错误 (400)';
+            if (lastError.response?.data?.error?.message) {
+                errorMessage += ` - ${lastError.response.data.error.message}`;
+            }
+        } else if (lastError.response?.status === 401) {
+            errorMessage += ': API密钥无效 (401)';
+        } else if (lastError.response?.status === 403) {
+            errorMessage += ': 访问被拒绝 (403)';
+        } else if (lastError.response?.status === 429) {
+            errorMessage += ': 请求频率过高 (429)';
+        } else if (lastError.response?.status >= 500) {
+            errorMessage += ': 服务器错误 (5xx)';
+        } else {
+            errorMessage += `: ${lastError.message}`;
+        }
+
+        throw new Error(errorMessage);
     }
 
     // 构建请求数据
     buildRequestData(data) {
         if (this.config.apiType === 'doubao') {
             // 豆包API格式 - 支持图片分析
-            const userMessage = {
-                role: "user",
-                content: []
-            };
+            let userMessage;
 
-            // 添加文本内容
-            userMessage.content.push({
-                type: "text",
-                text: data.prompt
-            });
-
-            // 如果有截图且模型支持视觉，添加图片内容
+            // 如果有截图且模型支持视觉，使用多模态格式
             if (data.screenshot && this.config.supportsVision) {
-                userMessage.content.push({
-                    type: "image_url",
-                    image_url: {
-                        url: data.screenshot
-                    }
-                });
+                console.log('Building multimodal request with screenshot, size:', data.screenshot.length);
+                userMessage = {
+                    role: "user",
+                    content: [
+                        {
+                            type: "text",
+                            text: data.prompt
+                        },
+                        {
+                            type: "image_url",
+                            image_url: {
+                                url: data.screenshot
+                            }
+                        }
+                    ]
+                };
+            } else {
+                // 纯文本格式
+                console.log('Building text-only request');
+                userMessage = {
+                    role: "user",
+                    content: data.prompt
+                };
             }
 
-            return {
+            const requestData = {
                 model: this.config.model,
                 messages: [
                     {
                         role: "system",
-                        content: "你是一个专业的网页分析助手，能够分析网页内容和截图并生成详细的使用说明。你可以同时分析网页的代码结构和视觉外观。"
+                        content: "你是一个专业的网页分析助手，能够分析网页内容和截图并生成详细的使用说明。"
                     },
                     userMessage
-                ]
+                ],
+                max_tokens: 2000,
+                temperature: 0.7
             };
+
+            console.log('Request data prepared:', {
+                model: requestData.model,
+                messageCount: requestData.messages.length,
+                hasScreenshot: !!(data.screenshot && this.config.supportsVision),
+                userMessageType: Array.isArray(userMessage.content) ? 'multimodal' : 'text'
+            });
+
+            return requestData;
         } else if (this.config.apiType === 'ollama') {
             // Ollama格式
             return {

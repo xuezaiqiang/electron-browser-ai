@@ -115,40 +115,21 @@ ipcMain.handle('extract-page-data', async () => {
     }
 });
 
-// 处理截图请求
+// 处理截图请求 - 返回base64格式
 ipcMain.handle('capture-screenshot', async () => {
     try {
         const image = await mainWindow.webContents.capturePage();
 
-        // 保存截图到临时文件
-        const fs = require('fs');
-        const path = require('path');
-        const os = require('os');
+        // 直接转换为base64格式，避免本地文件URL问题
+        const base64Data = image.toDataURL();
 
-        const tempDir = path.join(os.tmpdir(), 'electron-browser-ai');
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-        }
-
-        const timestamp = Date.now();
-        const filename = `screenshot-${timestamp}.png`;
-        const filepath = path.join(tempDir, filename);
-
-        // 保存PNG文件
-        const buffer = image.toPNG();
-        fs.writeFileSync(filepath, buffer);
-
-        // 返回本地文件URL
-        const fileUrl = `file://${filepath.replace(/\\/g, '/')}`;
-
-        console.log('Screenshot saved to:', filepath);
-        console.log('File URL:', fileUrl);
+        console.log('Screenshot captured, size:', base64Data.length, 'characters');
 
         return {
             success: true,
-            url: fileUrl,
-            path: filepath,
-            size: buffer.length
+            url: base64Data, // 直接返回base64 data URL
+            size: base64Data.length,
+            format: 'base64'
         };
     } catch (error) {
         console.error('Error capturing screenshot:', error);

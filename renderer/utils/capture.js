@@ -70,23 +70,23 @@ class ScreenCapture {
     // 截取当前页面
     async captureCurrentPage(options = {}) {
         try {
-            // 使用主进程的截图功能，保存到本地文件
+            // 使用主进程的截图功能，返回base64格式
             const result = await window.electronAPI.captureScreenshot();
 
             if (result.success) {
                 // 保存最后一次截图信息
                 this.lastCapture = {
                     url: result.url,
-                    path: result.path,
                     size: result.size,
+                    format: result.format,
                     timestamp: new Date().toISOString(),
                     options: options
                 };
 
-                console.log('✅ 截图成功保存到:', result.path);
-                console.log('📊 文件大小:', result.size, 'bytes');
+                console.log('✅ 截图成功，格式:', result.format);
+                console.log('📊 数据大小:', result.size, 'characters');
 
-                // 返回本地文件URL
+                // 返回base64 data URL
                 return result.url;
             } else {
                 throw new Error(result.error || '截图失败');

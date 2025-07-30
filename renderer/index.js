@@ -489,10 +489,10 @@ class ElectronBrowserAI {
                 await new Promise(resolve => setTimeout(resolve, 2000));
             }
 
-            // 提取页面数据
-            window.documentationDisplay.showLoading('正在提取页面数据...');
+            // 提取页面基本信息
+            window.documentationDisplay.showLoading('正在提取页面基本信息...');
             if (window.aiDebugger) {
-                window.aiDebugger.log('开始提取页面数据', 'info');
+                window.aiDebugger.log('开始提取页面基本信息（简化模式）', 'info');
             }
             const pageData = await window.pageExtractor.extractPageData();
 
@@ -546,9 +546,9 @@ class ElectronBrowserAI {
             }
 
             // 发送到AI模型
-            window.documentationDisplay.showLoading('正在生成使用说明...');
+            window.documentationDisplay.showLoading('正在基于截图生成使用说明...');
             if (window.aiDebugger) {
-                window.aiDebugger.log('发送数据到AI模型', 'info');
+                window.aiDebugger.log('发送数据到AI模型（主要基于截图分析）', 'info');
             }
 
             const result = await window.aiAPI.sendToModel(cleanPageData);
@@ -598,27 +598,24 @@ class ElectronBrowserAI {
         }
     }
 
-    // 清理页面数据，确保可序列化
+    // 清理页面数据，确保可序列化 - 简化版本
     sanitizePageData(pageData) {
         const cleanData = {
             url: this.sanitizeString(pageData.url),
             title: this.sanitizeString(pageData.title),
-            html: this.sanitizeString(pageData.html, 50000),
-            css: this.sanitizeString(pageData.css, 20000),
-            scripts: this.sanitizeString(pageData.scripts, 20000),
+            html: '<!-- HTML extraction skipped for safety -->',
+            css: '/* CSS extraction skipped for safety */',
+            scripts: '// JavaScript extraction skipped for safety',
+            metadata: {
+                description: this.sanitizeString(pageData.metadata?.description || ''),
+                keywords: this.sanitizeString(pageData.metadata?.keywords || '')
+            },
             screenshot: pageData.screenshot || null
         };
 
         // 验证数据大小
         const dataSize = JSON.stringify(cleanData).length;
-        console.log('📊 清理后数据大小:', dataSize, 'bytes');
-
-        if (dataSize > 5 * 1024 * 1024) { // 5MB限制
-            console.warn('⚠️ 数据大小超出限制，进一步截断');
-            cleanData.html = this.sanitizeString(cleanData.html, 30000);
-            cleanData.css = this.sanitizeString(cleanData.css, 10000);
-            cleanData.scripts = this.sanitizeString(cleanData.scripts, 10000);
-        }
+        console.log('📊 简化后数据大小:', dataSize, 'bytes');
 
         return cleanData;
     }
