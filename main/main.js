@@ -4,6 +4,28 @@ const fs = require('fs');
 const ModelAPI = require('./model-api');
 // const MCPInterface = require('./mcp'); // 暂时注释掉MCP功能
 
+// 导入Python自动化桥接器
+let PythonAutomationBridge, searchTaobao, searchBaidu, checkEnvironment;
+
+try {
+    const automationBridge = require('../python_automation/automation_bridge');
+    PythonAutomationBridge = automationBridge.PythonAutomationBridge;
+    searchTaobao = automationBridge.searchTaobao;
+    searchBaidu = automationBridge.searchBaidu;
+    checkEnvironment = automationBridge.checkEnvironment;
+
+    console.log('✅ Python自动化桥接器导入成功');
+    console.log('✅ PythonAutomationBridge:', typeof PythonAutomationBridge);
+    console.log('✅ checkEnvironment function:', typeof checkEnvironment);
+} catch (error) {
+    console.error('❌ Python自动化桥接器导入失败:', error);
+    // 创建占位符函数，避免应用崩溃
+    PythonAutomationBridge = class { constructor() {} };
+    searchTaobao = async () => ({ success: false, error: 'Python自动化不可用' });
+    searchBaidu = async () => ({ success: false, error: 'Python自动化不可用' });
+    checkEnvironment = async () => ({ success: false, error: 'Python自动化不可用' });
+}
+
 let mainWindow;
 let modelAPI;
 // let mcpInterface; // 暂时注释掉MCP功能
@@ -50,6 +72,9 @@ app.whenReady().then(() => {
     modelAPI = new ModelAPI();
     // mcpInterface = new MCPInterface(); // 暂时注释掉MCP功能
 
+    // 注册所有IPC处理器
+    registerIPCHandlers();
+
     createWindow();
 });
 
@@ -68,7 +93,9 @@ app.on('activate', () => {
     }
 });
 
-// IPC 通信处理
+// IPC 通信处理函数
+function registerIPCHandlers() {
+    console.log('🔧 注册IPC处理器...');
 
 // 处理页面数据提取请求
 ipcMain.handle('extract-page-data', async () => {
@@ -318,9 +345,93 @@ ipcMain.handle('mcp-is-available', async () => {
         return { available: false, error: error.message };
     }
 });
+
+// ==================== Python自动化IPC处理器 ====================
+
+// 检查Python环境
+ipcMain.handle('python-check-environment', async () => {
+    try {
+        const result = await checkEnvironment();
+        return result;
+    } catch (error) {
+        console.error('Python环境检查失败:', error);
+        return {
+            success: false,
+            message: 'Python环境检查失败',
+            error: error.message
+        };
+    }
+});
+
+// 执行Python自动化工作流
+ipcMain.handle('python-execute-workflow', async (event, workflow, options = {}) => {
+    try {
+        console.log('🐍 执行Python自动化工作流:', workflow);
+        const bridge = new PythonAutomationBridge();
+        return await bridge.executeWorkflow(workflow, options);
+    } catch (error) {
+        console.error('Python工作流执行失败:', error);
+        return {
+            success: false,
+            message: 'Python工作流执行失败',
+            error: error.message
+        };
+    }
+});
+
+// 淘宝搜索便捷方法
+ipcMain.handle('python-search-taobao', async (event, query, options = {}) => {
+    try {
+        console.log('🛒 执行淘宝搜索:', query);
+        return await searchTaobao(query, options);
+    } catch (error) {
+        console.error('淘宝搜索失败:', error);
+        return {
+            success: false,
+            message: '淘宝搜索失败',
+            error: error.message
+        };
+    }
+});
+
+// 百度搜索便捷方法
+ipcMain.handle('python-search-baidu', async (event, query, options = {}) => {
+    try {
+        console.log('🔍 执行百度搜索:', query);
+        return await searchBaidu(query, options);
+    } catch (error) {
+        console.error('百度搜索失败:', error);
+        return {
+            success: false,
+            message: '百度搜索失败',
+            error: error.message
+        };
+    }
+});
+
+// 安装Python依赖
+ipcMain.handle('python-install-dependencies', async () => {
+    try {
+        console.log('📦 安装Python依赖...');
+        const bridge = new PythonAutomationBridge();
+        return await bridge.installDependencies();
+    } catch (error) {
+        console.error('Python依赖安装失败:', error);
+        return {
+            success: false,
+            message: 'Python依赖安装失败',
+            error: error.message
+        };
+    }
+});
 */
 
 // MCP功能暂时不可用的占位符
 ipcMain.handle('mcp-is-available', async () => {
     return { available: false, error: 'MCP功能暂时不可用' };
 });
+
+
+
+    console.log('✅ 所有IPC处理器注册完成');
+}

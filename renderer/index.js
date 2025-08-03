@@ -5,6 +5,7 @@ class ElectronBrowserAI {
         this.currentUrl = '';
         this.isAIConnected = false;
         this.isMCPAvailable = false;
+        this.isPythonAvailable = false;
         
         this.init();
     }
@@ -15,6 +16,18 @@ class ElectronBrowserAI {
         this.setupEventListeners();
         this.checkSystemStatus();
         this.loadSettings();
+        this.initializeAIChat();
+    }
+
+    // 初始化AI对话功能
+    initializeAIChat() {
+        // 等待DOM完全加载后再初始化AI对话管理器
+        if (window.AIChatManager) {
+            this.aiChatManager = new AIChatManager();
+            window.aiChatManager = this.aiChatManager; // 全局引用，供任务调度器使用
+        } else {
+            console.warn('AIChatManager not loaded yet');
+        }
     }
 
     // 设置DOM元素引用
@@ -32,11 +45,14 @@ class ElectronBrowserAI {
         this.documentationPanel = document.getElementById('documentation-panel');
         this.helpPanel = document.getElementById('help-panel');
         this.debugPanel = document.getElementById('debug-panel');
-        
+        this.aiSidebar = document.getElementById('ai-sidebar');
+        this.sidebarOverlay = document.getElementById('sidebar-overlay');
+
         // 按钮元素
         this.settingsBtn = document.getElementById('settings-btn');
         this.helpBtn = document.getElementById('help-btn');
         this.debugBtn = document.getElementById('debug-btn');
+        this.aiChatBtn = document.getElementById('ai-chat-btn');
         this.floatingBtn = document.getElementById('floating-button');
     }
 
@@ -55,6 +71,7 @@ class ElectronBrowserAI {
         this.settingsBtn.addEventListener('click', () => this.showSettings());
         this.helpBtn.addEventListener('click', () => this.showHelp());
         this.debugBtn.addEventListener('click', () => this.showDebug());
+        this.aiChatBtn.addEventListener('click', () => this.showAIChat());
 
         // 悬浮按钮事件
         this.floatingBtn.addEventListener('click', () => this.generateDocumentation());
@@ -227,6 +244,26 @@ class ElectronBrowserAI {
             console.warn('MCP availability check failed:', error);
             this.updateMCPStatus(false);
         }
+
+        // 检查Python自动化环境 - 延迟执行以确保主进程IPC处理器已注册
+        setTimeout(async () => {
+            try {
+                if (window.pythonAPI && window.pythonAPI.checkEnvironment) {
+                    const result = await window.pythonAPI.checkEnvironment();
+                    this.updatePythonStatus(result.success);
+                    if (result.success) {
+                        console.log('✅ Python环境检查通过');
+                    } else {
+                        console.warn('⚠️ Python环境检查失败:', result.message);
+                    }
+                } else {
+                    this.updatePythonStatus(false);
+                }
+            } catch (error) {
+                console.warn('Python environment check failed:', error);
+                this.updatePythonStatus(false);
+            }
+        }, 2000); // 延迟2秒执行
     }
 
     // 更新AI状态
@@ -241,6 +278,16 @@ class ElectronBrowserAI {
         this.isMCPAvailable = available;
         this.mcpStatus.textContent = available ? 'MCP: 可用' : 'MCP: 不可用';
         this.mcpStatus.className = available ? 'available' : 'unavailable';
+    }
+
+    // 更新Python状态
+    updatePythonStatus(available) {
+        this.isPythonAvailable = available;
+        const pythonStatus = document.getElementById('python-status');
+        if (pythonStatus) {
+            pythonStatus.textContent = available ? 'Python: 可用' : 'Python: 不可用';
+            pythonStatus.className = available ? 'available' : 'unavailable';
+        }
     }
 
     // 显示设置面板
@@ -267,6 +314,15 @@ class ElectronBrowserAI {
     showDebug() {
         if (window.aiDebugger) {
             window.aiDebugger.show();
+        }
+    }
+
+    // 显示AI智能助手侧边栏
+    showAIChat() {
+        if (this.aiChatManager) {
+            this.aiChatManager.show();
+        } else {
+            this.showNotification('AI智能助手正在初始化，请稍后再试', 'warning');
         }
     }
 
@@ -463,6 +519,14 @@ class ElectronBrowserAI {
             return;
         }
 
+        // 防止重复请求
+        if (this.isGeneratingDoc) {
+            this.showNotification('正在生成文档，请稍候...', 'warning');
+            return;
+        }
+
+        this.isGeneratingDoc = true;
+
         // 开始调试会话
         if (window.aiDebugger) {
             window.aiDebugger.startSession({
@@ -593,8 +657,22 @@ class ElectronBrowserAI {
                 window.aiDebugger.log('文档生成过程出错: ' + error.message, 'error');
             }
 
-            window.documentationDisplay.displayError(error.message);
-            this.showNotification('文档生成失败', 'error');
+            // 根据错误类型显示不同的错误信息
+            let errorMessage = '文档生成失败';
+            if (error.message.includes('timeout') || error.message.includes('超时')) {
+                errorMessage = '生成超时，请重试';
+                window.documentationDisplay.displayError('页面分析超时，可能是图片过大或网络较慢。建议：\n1. 刷新页面后重试\n2. 检查网络连接\n3. 稍后再试');
+            } else if (error.message.includes('Network Error') || error.message.includes('网络')) {
+                errorMessage = '网络连接失败';
+                window.documentationDisplay.displayError('网络连接错误，请检查网络设置后重试');
+            } else {
+                window.documentationDisplay.displayError(error.message);
+            }
+
+            this.showNotification(errorMessage, 'error');
+        } finally {
+            // 重置生成标志
+            this.isGeneratingDoc = false;
         }
     }
 
@@ -685,15 +763,18 @@ class ElectronBrowserAI {
 
 // 当DOM加载完成时初始化应用
 document.addEventListener('DOMContentLoaded', async () => {
-    window.app = new ElectronBrowserAI();
+    // 延迟初始化以确保主进程IPC处理器已注册
+    setTimeout(async () => {
+        window.app = new ElectronBrowserAI();
 
-    // 清理旧的截图文件
-    try {
-        const cleanupResult = await window.electronAPI.cleanupScreenshots();
-        if (cleanupResult.success && cleanupResult.cleanedCount > 0) {
-            console.log(`🧹 清理了 ${cleanupResult.cleanedCount} 个旧截图文件`);
+        // 清理旧的截图文件
+        try {
+            const cleanupResult = await window.electronAPI.cleanupScreenshots();
+            if (cleanupResult.success && cleanupResult.cleanedCount > 0) {
+                console.log(`🧹 清理了 ${cleanupResult.cleanedCount} 个旧截图文件`);
+            }
+        } catch (error) {
+            console.warn('清理旧截图文件失败:', error);
         }
-    } catch (error) {
-        console.warn('清理旧截图文件失败:', error);
-    }
+    }, 3000); // 延迟3秒初始化
 });

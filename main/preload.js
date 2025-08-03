@@ -64,6 +64,24 @@ contextBridge.exposeInMainWorld('mcpAPI', {
     isAvailable: () => ipcRenderer.invoke('mcp-is-available')
 });
 
+// 暴露Python自动化相关的API
+contextBridge.exposeInMainWorld('pythonAPI', {
+    // 检查Python环境
+    checkEnvironment: () => ipcRenderer.invoke('python-check-environment'),
+
+    // 执行Python自动化工作流
+    executeWorkflow: (workflow, options) => ipcRenderer.invoke('python-execute-workflow', workflow, options),
+
+    // 淘宝搜索便捷方法
+    searchTaobao: (query, options) => ipcRenderer.invoke('python-search-taobao', query, options),
+
+    // 百度搜索便捷方法
+    searchBaidu: (query, options) => ipcRenderer.invoke('python-search-baidu', query, options),
+
+    // 安装Python依赖
+    installDependencies: () => ipcRenderer.invoke('python-install-dependencies')
+});
+
 // 监听来自主进程的消息
 window.addEventListener('DOMContentLoaded', () => {
     // 可以在这里添加一些初始化逻辑

@@ -18,6 +18,7 @@
             </div>
             
             <div class="toolbar-section">
+                <button id="ai-chat-btn" class="toolbar-btn">🤖 AI助手</button>
                 <button id="debug-btn" class="toolbar-btn">🔍 调试</button>
                 <button id="settings-btn" class="toolbar-btn">设置</button>
                 <button id="help-btn" class="toolbar-btn">帮助</button>
@@ -48,6 +49,7 @@
             <span id="status-text">就绪</span>
             <span id="ai-status">AI: 未连接</span>
             <span id="mcp-status">MCP: 检查中...</span>
+            <span id="python-status">Python: 检查中...</span>
         </div>
     </div>
 
@@ -171,6 +173,103 @@
         </div>
     </div>
 
+    <!-- AI智能助手侧边栏 -->
+    <div id="ai-sidebar" class="ai-sidebar hidden">
+        <!-- 侧边栏头部 -->
+        <div class="sidebar-header">
+            <div class="header-content">
+                <div class="ai-avatar">
+                    <div class="avatar-icon">🤖</div>
+                    <div class="status-indicator online"></div>
+                </div>
+                <div class="header-text">
+                    <h3>AI智能助手</h3>
+                    <span class="status-text">在线 · 随时为您服务</span>
+                </div>
+            </div>
+            <div class="header-actions">
+                <button id="minimize-sidebar" class="header-btn" title="最小化">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13H5v-2h14v2z"/>
+                    </svg>
+                </button>
+                <button id="close-sidebar" class="header-btn" title="关闭">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        <!-- 对话区域 -->
+        <div class="chat-container">
+            <div id="chat-messages" class="chat-messages">
+                <div class="welcome-message">
+                    <div class="welcome-icon">✨</div>
+                    <h4>欢迎使用AI智能助手</h4>
+                    <p>我可以理解您的自然语言指令，并在指定时间自动执行浏览器操作。</p>
+                    <div class="quick-examples">
+                        <div class="example-item" onclick="insertExample(this.textContent)">
+                            💡 明天上午10点搜索今天的新闻
+                        </div>
+                        <div class="example-item" onclick="insertExample(this.textContent)">
+                            💡 下午3点提醒我查看邮箱
+                        </div>
+                        <div class="example-item" onclick="insertExample(this.textContent)">
+                            💡 晚上8点用百度搜索天气
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 输入区域 -->
+            <div class="chat-input-area">
+                <div class="input-container">
+                    <textarea id="chat-input" placeholder="输入您的指令，支持任意自然语言..." rows="1"></textarea>
+                    <button id="send-chat" class="send-btn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-actions">
+                    <button id="clear-chat" class="action-btn">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                        </svg>
+                        清空对话
+                    </button>
+                    <span class="input-hint">支持任意自然语言表达</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 任务管理区域 -->
+        <div class="tasks-section">
+            <div class="section-header" id="tasks-header">
+                <div class="header-left">
+                    <h4>📅 智能任务</h4>
+                    <span class="task-count" id="task-count">0</span>
+                </div>
+                <button class="collapse-btn" id="collapse-tasks" title="折叠/展开任务列表">
+                    <svg class="collapse-icon" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="tasks-list" class="tasks-list">
+                <div class="no-tasks">
+                    <div class="empty-icon">📋</div>
+                    <p>还没有任务</p>
+                    <span>快来创建第一个智能任务吧！</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 侧边栏遮罩 -->
+    <div id="sidebar-overlay" class="sidebar-overlay hidden"></div>
+
     <!-- 调试面板 -->
     <div id="debug-panel" class="panel hidden">
         <div class="panel-header">
@@ -219,6 +318,18 @@
     <div id="notifications"></div>
 
     <!-- 脚本文件 -->
+    <script src="utils/nlp-parser.js"></script>
+
+    <!-- 🆕 通用自动化模块 -->
+    <script src="automation/command-parser.js"></script>
+    <script src="automation/element-finder.js"></script>
+    <script src="automation/vision-analyzer.js"></script>
+    <script src="automation/hybrid-element-finder.js"></script>
+    <script src="automation/action-executor.js"></script>
+    <script src="automation/automation-engine.js"></script>
+
+    <script src="utils/task-scheduler.js"></script>
+    <script src="utils/ai-chat.js"></script>
     <script src="index.js"></script>
     <script src="floating-button/button.js"></script>
     <script src="utils/extract.js"></script>

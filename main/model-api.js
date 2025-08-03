@@ -6,12 +6,13 @@ class ModelAPI {
             baseURL: 'https://ark.cn-beijing.volces.com/api/v3', // 豆包API地址
             model: 'doubao-seed-1-6-250615', // 默认使用支持图片的模型
             apiKey: '0bf1c076-b6e9-479a-9c55-051813ad5e4a', // API密钥
-            timeout: 30000,
+            timeout: 60000, // 增加到60秒，处理大图片时需要更长时间
             maxRetries: 3,
             apiType: 'doubao', // API类型：doubao, ollama, openai
             supportsVision: true // 支持图片分析
         };
         this.currentRequest = null;
+        this.abortController = null;
     }
 
     // 设置模型配置
@@ -22,6 +23,16 @@ class ModelAPI {
     // 发送数据到AI模型生成使用说明
     async generateDocumentation(pageData) {
         try {
+            // 取消之前的请求（如果存在）
+            this.cancelCurrentRequest();
+
+            // 识别请求类型
+            const requestType = pageData.chatMode ? 'AI聊天' : '页面分析';
+            const hasScreenshot = pageData.screenshot ? '有截图' : '无截图';
+            const hasCustomPrompt = pageData.customPrompt ? '自定义提示词' : '默认提示词';
+
+            console.log(`AI API请求 - 类型: ${requestType}, 截图: ${hasScreenshot}, 提示词: ${hasCustomPrompt}`);
+
             const prompt = this.buildPrompt(pageData);
 
             const response = await this.sendRequest({
@@ -35,12 +46,35 @@ class ModelAPI {
                 }
             });
 
-            return this.parseResponse(response);
+            const result = this.parseResponse(response);
+            console.log(`AI API响应 - 类型: ${requestType}, 成功: ${result.success}`);
+
+            return result;
         } catch (error) {
-            console.error('Error generating documentation:', error);
+            const requestType = pageData.chatMode ? 'AI聊天' : '页面分析';
+            console.error(`AI API错误 - 类型: ${requestType}:`, error);
+
+            // 根据错误类型提供更友好的错误信息
+            let errorMessage = error.message;
+            if (error.message.includes('timeout')) {
+                if (pageData.chatMode) {
+                    errorMessage = 'AI聊天响应超时，请重试';
+                } else {
+                    errorMessage = '页面分析超时，可能是图片过大或网络较慢，请重试';
+                }
+            } else if (error.message.includes('Network Error')) {
+                errorMessage = '网络连接错误，请检查网络设置';
+            } else if (error.message.includes('403')) {
+                errorMessage = 'API访问被拒绝，请检查API密钥';
+            } else if (error.message.includes('429')) {
+                errorMessage = 'API请求频率过高，请稍后重试';
+            }
+
             return {
                 success: false,
-                error: `AI模型请求失败: ${error.message}`,
+                error: errorMessage,
+                originalError: error.message,
+                requestType: requestType,
                 timestamp: new Date().toISOString()
             };
         }
@@ -48,7 +82,19 @@ class ModelAPI {
 
     // 构建发送给AI的提示词 - 主要基于截图分析
     buildPrompt(pageData) {
-        const { screenshot } = pageData;
+        const { screenshot, customPrompt, chatMode } = pageData;
+
+        // 如果是聊天模式且有自定义提示词，直接使用（AI对话框功能）
+        if (chatMode && customPrompt) {
+            console.log('AI聊天模式：使用自定义提示词');
+            return customPrompt;
+        }
+
+        // 如果是页面分析模式且有自定义提示词，也直接使用
+        if (!chatMode && customPrompt) {
+            console.log('页面分析模式：使用自定义提示词');
+            return customPrompt;
+        }
 
         let prompt = `请分析以下网页并生成详细的使用说明：
 
@@ -142,6 +188,9 @@ class ModelAPI {
                 const headers = this.buildHeaders();
                 const endpoint = this.getEndpoint();
 
+                // 创建 AbortController 用于取消请求
+                this.abortController = new AbortController();
+
                 this.currentRequest = axios.create({
                     baseURL: this.config.baseURL,
                     timeout: this.config.timeout,
@@ -151,11 +200,25 @@ class ModelAPI {
                 console.log('Sending request to:', `${this.config.baseURL}${endpoint}`);
                 console.log('Request data size:', JSON.stringify(requestData).length, 'characters');
 
-                const response = await this.currentRequest.post(endpoint, requestData);
+                const response = await this.currentRequest.post(endpoint, requestData, {
+                    signal: this.abortController.signal
+                });
                 console.log('Response received:', response.status);
+
+                // 清理 AbortController
+                this.abortController = null;
+                this.currentRequest = null;
+
                 return response.data;
             } catch (error) {
                 lastError = error;
+
+                // 检查是否是用户取消的请求
+                if (error.name === 'AbortError' || error.code === 'ABORT_ERR') {
+                    console.log('请求被用户取消');
+                    throw new Error('请求已被取消');
+                }
+
                 console.error(`Request attempt ${i + 1} failed:`);
                 console.error('Status:', error.response?.status);
                 console.error('Status text:', error.response?.statusText);
@@ -197,6 +260,10 @@ class ModelAPI {
         } else {
             errorMessage += `: ${lastError.message}`;
         }
+
+        // 清理资源
+        this.abortController = null;
+        this.currentRequest = null;
 
         throw new Error(errorMessage);
     }
@@ -367,10 +434,16 @@ class ModelAPI {
 
     // 取消当前请求
     cancelCurrentRequest() {
-        if (this.currentRequest) {
-            this.currentRequest.cancel('Request cancelled by user');
-            this.currentRequest = null;
+        if (this.abortController) {
+            try {
+                this.abortController.abort('Request cancelled by user');
+                console.log('已取消当前AI请求');
+            } catch (error) {
+                console.warn('取消请求时出错:', error.message);
+            }
+            this.abortController = null;
         }
+        this.currentRequest = null;
     }
 
     // 测试连接
