@@ -258,7 +258,7 @@ class TaskScheduler {
         this.notifyListeners('taskCompleted', task);
     }
 
-    // 执行搜索任务
+    // 执行搜索任务 - 改进版本，增加调试信息
     async executeSearchTask(task) {
         const webview = document.getElementById('webview');
         if (!webview) {
@@ -273,6 +273,9 @@ class TaskScheduler {
             await this.navigateToSite(webview, task.site.url);
             await this.waitForPageLoad(webview);
             console.log('页面加载完成');
+
+            // 添加页面状态检查
+            await this.debugPageState(webview);
         }
 
         // 查找搜索框并输入搜索内容
@@ -289,6 +292,8 @@ class TaskScheduler {
 
             const inputSuccess = await this.inputText(webview, searchSelector, task.searchQuery);
             if (!inputSuccess) {
+                // 添加详细的错误诊断
+                await this.debugSearchBoxIssue(webview);
                 throw new Error('无法找到搜索框或输入失败');
             }
 
@@ -297,9 +302,17 @@ class TaskScheduler {
             // 等待一下确保输入完成
             await this.sleep(500);
 
+            // 验证输入是否成功
+            const inputVerified = await this.verifyInputContent(webview, task.searchQuery);
+            if (!inputVerified) {
+                console.warn('输入内容验证失败，但继续尝试提交');
+            }
+
             // 提交搜索（按回车或点击搜索按钮）
             const submitSuccess = await this.submitSearch(webview, searchSelector);
             if (!submitSuccess) {
+                console.error('搜索提交失败，进行诊断');
+                await this.debugSubmitIssue(webview);
                 throw new Error('搜索提交失败');
             }
 
@@ -414,17 +427,32 @@ class TaskScheduler {
         });
     }
 
-    // 在页面中输入文本 - 使用sendInputEvent避免序列化问题
+    // 在页面中输入文本 - 改进版本，优先使用更可靠的方法
     async inputText(webview, selector, text) {
         console.log(`开始输入文本: "${text}"`);
 
+        if (!text) {
+            console.warn('输入文本为空');
+            return false;
+        }
+
+        // 首先尝试改进的JavaScript方法（更可靠）
+        console.log('优先使用改进的JavaScript输入方法');
+        const fallbackResult = await this.inputTextFallback(webview, selector, text);
+
+        if (fallbackResult) {
+            console.log('JavaScript输入方法成功');
+            return true;
+        }
+
+        // 如果JavaScript方法失败，尝试sendInputEvent方法
         try {
-            // 方法1: 尝试使用sendInputEvent直接发送键盘事件
             if (webview.sendInputEvent) {
-                console.log('使用sendInputEvent方法输入文本');
+                console.log('回退到sendInputEvent方法');
 
                 // 先点击页面确保焦点
                 await this.clickSearchBox(webview);
+                await new Promise(resolve => setTimeout(resolve, 200));
 
                 // 清空现有内容 (Ctrl+A + Delete)
                 webview.sendInputEvent({
@@ -457,22 +485,19 @@ class TaskScheduler {
                         type: 'char',
                         keyCode: char
                     });
-                    await new Promise(resolve => setTimeout(resolve, 50));
+                    await new Promise(resolve => setTimeout(resolve, 30));
                 }
 
-                console.log('文本输入完成');
+                console.log('sendInputEvent文本输入完成');
                 return true;
             }
 
-            // 方法2: 回退到简化的executeJavaScript方法
-            console.log('sendInputEvent不可用，使用简化的executeJavaScript方法');
-            return await this.inputTextFallback(webview, selector, text);
-
         } catch (error) {
-            console.error('输入文本失败:', error);
-            // 最后的回退方法
-            return await this.inputTextFallback(webview, selector, text);
+            console.error('sendInputEvent输入失败:', error);
         }
+
+        console.error('所有输入方法都失败了');
+        return false;
     }
 
     // 点击搜索框
@@ -513,24 +538,69 @@ class TaskScheduler {
             const script = `
                 (function() {
                     try {
-                        const selectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]'];
+                        const selectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]', '.s_ipt'];
                         let found = false;
+                        let element = null;
 
+                        // 首先尝试找到搜索框
                         for (const sel of selectors) {
-                            const element = document.querySelector(sel);
+                            element = document.querySelector(sel);
                             if (element && element.offsetParent !== null) {
-                                element.focus();
-                                element.value = '';
-                                element.value = '${text.replace(/'/g, "\\'")}';
-                                element.dispatchEvent(new Event('input', { bubbles: true }));
-                                element.dispatchEvent(new Event('change', { bubbles: true }));
                                 found = true;
                                 break;
                             }
                         }
 
-                        return found;
+                        if (!found) {
+                            console.log('未找到搜索框');
+                            return false;
+                        }
+
+                        console.log('找到搜索框:', element.tagName, element.id, element.className);
+
+                        // 多种方法尝试输入
+                        try {
+                            // 方法1: 直接设置value
+                            element.focus();
+                            element.click();
+                            element.value = '';
+                            element.value = '${text.replace(/'/g, "\\'")}';
+
+                            // 触发多种事件确保输入被识别
+                            element.dispatchEvent(new Event('focus', { bubbles: true }));
+                            element.dispatchEvent(new Event('input', { bubbles: true }));
+                            element.dispatchEvent(new Event('change', { bubbles: true }));
+                            element.dispatchEvent(new Event('keyup', { bubbles: true }));
+
+                            console.log('输入完成，当前值:', element.value);
+                            return true;
+
+                        } catch (inputError) {
+                            console.error('输入失败:', inputError);
+
+                            // 方法2: 使用模拟键盘输入
+                            try {
+                                element.focus();
+                                element.select();
+
+                                // 清空内容
+                                document.execCommand('selectAll');
+                                document.execCommand('delete');
+
+                                // 插入文本
+                                document.execCommand('insertText', false, '${text.replace(/'/g, "\\'")}');
+
+                                console.log('使用execCommand输入完成');
+                                return true;
+
+                            } catch (execError) {
+                                console.error('execCommand输入失败:', execError);
+                                return false;
+                            }
+                        }
+
                     } catch (e) {
+                        console.error('输入方法异常:', e);
                         return false;
                     }
                 })();
@@ -613,59 +683,263 @@ class TaskScheduler {
         }
     }
 
-    // 回退的提交搜索方法
+    // 回退的提交搜索方法 - 改进版本
     async submitSearchFallback(webview) {
-        console.log('使用回退提交搜索方法');
+        console.log('使用改进的提交搜索方法');
 
         return new Promise((resolve) => {
             const script = `
                 (function() {
                     try {
-                        // 方法1: 点击百度搜索按钮
-                        const baiduButton = document.querySelector('#su');
-                        if (baiduButton && baiduButton.offsetParent !== null) {
-                            baiduButton.click();
-                            return true;
-                        }
+                        console.log('开始搜索提交流程');
 
-                        // 方法2: 查找搜索框并按回车
-                        const selectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]'];
-                        for (const sel of selectors) {
-                            const element = document.querySelector(sel);
-                            if (element && element.offsetParent !== null) {
-                                element.focus();
-                                const enterEvent = new KeyboardEvent('keydown', {
-                                    key: 'Enter',
-                                    code: 'Enter',
-                                    keyCode: 13,
-                                    which: 13,
-                                    bubbles: true
-                                });
-                                element.dispatchEvent(enterEvent);
-                                return true;
+                        // 方法1: 点击百度搜索按钮
+                        const baiduButtons = ['#su', '.s_btn', 'input[value="百度一下"]', 'button[type="submit"]'];
+                        for (const btnSel of baiduButtons) {
+                            const button = document.querySelector(btnSel);
+                            if (button && button.offsetParent !== null) {
+                                console.log('找到搜索按钮:', btnSel);
+                                button.click();
+                                return { success: true, method: 'button_click', selector: btnSel };
                             }
                         }
 
-                        return false;
+                        // 方法2: 查找搜索框并按回车
+                        const inputSelectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]', '.s_ipt'];
+                        for (const sel of inputSelectors) {
+                            const element = document.querySelector(sel);
+                            if (element && element.offsetParent !== null && element.value.trim()) {
+                                console.log('找到搜索框，尝试回车:', sel, '值:', element.value);
+                                element.focus();
+
+                                // 尝试多种回车事件
+                                const events = [
+                                    new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }),
+                                    new KeyboardEvent('keypress', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true }),
+                                    new KeyboardEvent('keyup', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })
+                                ];
+
+                                events.forEach(event => element.dispatchEvent(event));
+
+                                // 也尝试表单提交
+                                const form = element.closest('form');
+                                if (form) {
+                                    console.log('找到表单，尝试提交');
+                                    form.submit();
+                                }
+
+                                return { success: true, method: 'enter_key', selector: sel };
+                            }
+                        }
+
+                        // 方法3: 查找任何提交按钮
+                        const submitButtons = document.querySelectorAll('button[type="submit"], input[type="submit"], .search-btn, .btn-search');
+                        for (const btn of submitButtons) {
+                            if (btn.offsetParent !== null) {
+                                console.log('找到通用提交按钮');
+                                btn.click();
+                                return { success: true, method: 'generic_submit' };
+                            }
+                        }
+
+                        console.log('未找到任何提交方式');
+                        return { success: false, reason: 'no_submit_method_found' };
+
                     } catch (e) {
-                        return false;
+                        console.error('提交搜索异常:', e);
+                        return { success: false, error: e.message };
                     }
                 })();
             `;
 
             try {
                 webview.executeJavaScript(script, (result) => {
-                    console.log('回退提交搜索结果:', result);
-                    resolve(Boolean(result));
+                    console.log('改进提交搜索结果:', result);
+                    resolve(result && result.success);
                 });
             } catch (error) {
-                console.error('回退提交搜索失败:', error);
+                console.error('改进提交搜索失败:', error);
                 resolve(false);
             }
         });
     }
 
 
+
+    // 🔍 调试页面状态
+    async debugPageState(webview) {
+        return new Promise((resolve) => {
+            const script = `
+                (function() {
+                    const info = {
+                        url: window.location.href,
+                        title: document.title,
+                        readyState: document.readyState,
+                        searchBoxes: [],
+                        forms: document.forms.length,
+                        buttons: document.querySelectorAll('button, input[type="submit"]').length
+                    };
+
+                    // 查找所有可能的搜索框
+                    const selectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]', '.s_ipt'];
+                    selectors.forEach(sel => {
+                        const elem = document.querySelector(sel);
+                        if (elem) {
+                            info.searchBoxes.push({
+                                selector: sel,
+                                visible: elem.offsetParent !== null,
+                                value: elem.value,
+                                placeholder: elem.placeholder
+                            });
+                        }
+                    });
+
+                    return info;
+                })();
+            `;
+
+            webview.executeJavaScript(script, (result) => {
+                console.log('📊 页面状态调试信息:', result);
+                resolve(result);
+            });
+        });
+    }
+
+    // 🔍 调试搜索框问题
+    async debugSearchBoxIssue(webview) {
+        return new Promise((resolve) => {
+            const script = `
+                (function() {
+                    const debug = {
+                        allInputs: [],
+                        searchElements: [],
+                        focusableElements: []
+                    };
+
+                    // 所有输入框
+                    document.querySelectorAll('input').forEach((input, index) => {
+                        debug.allInputs.push({
+                            index: index,
+                            type: input.type,
+                            name: input.name,
+                            id: input.id,
+                            className: input.className,
+                            visible: input.offsetParent !== null,
+                            placeholder: input.placeholder
+                        });
+                    });
+
+                    // 搜索相关元素
+                    const searchSelectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]', '.s_ipt'];
+                    searchSelectors.forEach(sel => {
+                        const elem = document.querySelector(sel);
+                        if (elem) {
+                            debug.searchElements.push({
+                                selector: sel,
+                                found: true,
+                                visible: elem.offsetParent !== null,
+                                disabled: elem.disabled,
+                                readonly: elem.readOnly
+                            });
+                        } else {
+                            debug.searchElements.push({
+                                selector: sel,
+                                found: false
+                            });
+                        }
+                    });
+
+                    return debug;
+                })();
+            `;
+
+            webview.executeJavaScript(script, (result) => {
+                console.log('🔍 搜索框调试信息:', result);
+                resolve(result);
+            });
+        });
+    }
+
+    // 🔍 验证输入内容
+    async verifyInputContent(webview, expectedText) {
+        return new Promise((resolve) => {
+            const script = `
+                (function() {
+                    const selectors = ['#kw', 'input[name="wd"]', 'input[type="search"]', 'input[name="q"]', '.s_ipt'];
+                    for (const sel of selectors) {
+                        const elem = document.querySelector(sel);
+                        if (elem && elem.offsetParent !== null) {
+                            const actualValue = elem.value;
+                            const expected = '${expectedText.replace(/'/g, "\\'")}';
+                            return {
+                                found: true,
+                                selector: sel,
+                                expected: expected,
+                                actual: actualValue,
+                                matches: actualValue === expected
+                            };
+                        }
+                    }
+                    return { found: false };
+                })();
+            `;
+
+            webview.executeJavaScript(script, (result) => {
+                console.log('✅ 输入内容验证:', result);
+                resolve(result && result.matches);
+            });
+        });
+    }
+
+    // 🔍 调试提交问题
+    async debugSubmitIssue(webview) {
+        return new Promise((resolve) => {
+            const script = `
+                (function() {
+                    const debug = {
+                        submitButtons: [],
+                        forms: [],
+                        searchBoxValue: null
+                    };
+
+                    // 查找提交按钮
+                    const buttonSelectors = ['#su', '.s_btn', 'input[value="百度一下"]', 'button[type="submit"]', 'input[type="submit"]'];
+                    buttonSelectors.forEach(sel => {
+                        const elem = document.querySelector(sel);
+                        debug.submitButtons.push({
+                            selector: sel,
+                            found: !!elem,
+                            visible: elem ? elem.offsetParent !== null : false,
+                            disabled: elem ? elem.disabled : null
+                        });
+                    });
+
+                    // 查找表单
+                    Array.from(document.forms).forEach((form, index) => {
+                        debug.forms.push({
+                            index: index,
+                            action: form.action,
+                            method: form.method,
+                            elements: form.elements.length
+                        });
+                    });
+
+                    // 当前搜索框值
+                    const searchBox = document.querySelector('#kw') || document.querySelector('input[name="wd"]');
+                    if (searchBox) {
+                        debug.searchBoxValue = searchBox.value;
+                    }
+
+                    return debug;
+                })();
+            `;
+
+            webview.executeJavaScript(script, (result) => {
+                console.log('🔍 提交问题调试信息:', result);
+                resolve(result);
+            });
+        });
+    }
 
     // 取消任务
     cancelTask(taskId) {

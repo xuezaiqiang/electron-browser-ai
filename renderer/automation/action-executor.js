@@ -10,6 +10,38 @@ class UniversalActionExecutor {
         this.initialized = false;
     }
 
+    // 安全的对象克隆函数
+    safeClone(obj) {
+        try {
+            if (obj === null || typeof obj !== 'object') {
+                return obj;
+            }
+
+            if (obj instanceof Date) {
+                return new Date(obj.getTime());
+            }
+
+            if (obj instanceof Array) {
+                return obj.map(item => this.safeClone(item));
+            }
+
+            if (typeof obj === 'object') {
+                const cloned = {};
+                for (const key in obj) {
+                    if (obj.hasOwnProperty(key)) {
+                        cloned[key] = this.safeClone(obj[key]);
+                    }
+                }
+                return cloned;
+            }
+
+            return obj;
+        } catch (error) {
+            console.warn('对象克隆失败，返回原始对象:', error);
+            return obj;
+        }
+    }
+
     // 初始化执行器
     init(aiAPI, screenCapture) {
         if (this.initialized) return;
@@ -29,22 +61,24 @@ class UniversalActionExecutor {
         if (!webview) {
             throw new Error('WebView不可用');
         }
-        
-        console.log('执行命令:', command);
+
+        // 安全克隆命令对象，避免克隆错误
+        const safeCommand = this.safeClone(command);
+        console.log('执行命令:', safeCommand);
         this.isExecuting = true;
         
         try {
             let result;
-            
-            switch (command.type) {
+
+            switch (safeCommand.type) {
                 case 'click':
-                    result = await this.executeClick(webview, command);
+                    result = await this.executeClick(webview, safeCommand);
                     break;
                 case 'input':
-                    result = await this.executeInput(webview, command);
+                    result = await this.executeInput(webview, safeCommand);
                     break;
                 case 'navigate':
-                    result = await this.executeNavigate(webview, command);
+                    result = await this.executeNavigate(webview, safeCommand);
                     break;
                 case 'form_fill':
                     result = await this.executeFormFill(webview, command);

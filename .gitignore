@@ -173,3 +173,28 @@ docs/build/
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Temporary documentation and test files
+*-GUIDE.md
+*-SUMMARY.md
+*-REPORT.md
+TEMP-*.md
+fix-*.js
+test-*.js
+start-*.js
+cleanup*.js
+complete-*.js
+ultimate-*.js
+simple-*.js

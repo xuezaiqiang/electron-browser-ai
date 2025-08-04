@@ -125,10 +125,45 @@ class AutomationEngine {
         }
     }
 
-    // 🆕 使用Python自动化系统执行命令
+    // 🆕 使用AI增强的Python自动化系统执行命令
     async executePythonCommand(userCommand) {
         try {
-            console.log('🐍 调用Python自动化系统:', userCommand);
+            console.log('🤖 调用AI增强Python自动化系统:', userCommand);
+
+            // 检查API是否可用
+            if (!window.pythonAPI || !window.pythonAPI.executeAICommand) {
+                console.warn('🔄 Python API不可用，回退到传统工作流方式');
+                return await this.executePythonWorkflowFallback(userCommand);
+            }
+
+            // 优先使用AI增强命令执行
+            const result = await window.pythonAPI.executeAICommand(userCommand, {
+                headless: false, // 显示浏览器窗口
+                timeout: 30000,  // 30秒超时
+                aiApi: 'http://localhost:3000/api/ai'
+            });
+
+            console.log('🤖 AI增强Python自动化执行完成，结果:', result);
+
+            if (result && result.success) {
+                return result;
+            } else {
+                // 如果AI增强失败，回退到传统工作流方式
+                console.warn('🔄 AI增强执行失败，回退到传统工作流方式');
+                return await this.executePythonWorkflowFallback(userCommand);
+            }
+
+        } catch (error) {
+            console.error('🤖 AI增强Python自动化执行异常:', error);
+            // 回退到传统工作流方式
+            return await this.executePythonWorkflowFallback(userCommand);
+        }
+    }
+
+    // 回退的传统工作流执行方式
+    async executePythonWorkflowFallback(userCommand) {
+        try {
+            console.log('🔄 使用传统工作流方式:', userCommand);
 
             // 将自然语言命令转换为Python工作流
             const workflow = await this.convertToPythonWorkflow(userCommand);
@@ -144,6 +179,15 @@ class AutomationEngine {
 
             console.log('🐍 准备调用Python自动化，工作流步骤数:', workflow.length);
 
+            // 检查API是否可用
+            if (!window.pythonAPI || !window.pythonAPI.executeWorkflow) {
+                console.error('🔄 Python工作流API不可用');
+                return {
+                    success: false,
+                    error: 'Python工作流API不可用'
+                };
+            }
+
             // 调用主进程的Python自动化
             const result = await window.pythonAPI.executeWorkflow(workflow, {
                 headless: false, // 显示浏览器窗口
@@ -151,7 +195,7 @@ class AutomationEngine {
             });
 
             console.log('🐍 Python自动化执行完成，结果:', result);
-            return result;
+            return result || { success: false, error: '未知错误' };
 
         } catch (error) {
             console.error('🐍 Python自动化调用失败:', error);

@@ -25,6 +25,50 @@ class PythonAutomationBridge {
     }
 
     /**
+     * 执行自然语言命令（AI增强）
+     * @param {string} command - 自然语言命令
+     * @param {Object} options - 选项
+     * @returns {Promise<Object>} 执行结果
+     */
+    async executeCommand(command, options = {}) {
+        try {
+            console.log('🤖 执行AI增强命令:', command);
+
+            // 构建Python命令
+            const args = [
+                this.scriptPath,
+                '--command', command
+            ];
+
+            if (options.headless) {
+                args.push('--headless');
+            }
+
+            if (options.aiApi) {
+                args.push('--ai-api', options.aiApi);
+            }
+
+            if (options.noAi) {
+                args.push('--no-ai');
+            }
+
+            console.log('🐍 启动AI增强Python自动化:', this.pythonPath, args.join(' '));
+
+            // 执行Python脚本
+            const result = await this.runPythonScript(args);
+            return result;
+
+        } catch (error) {
+            console.error('AI增强自动化执行失败:', error);
+            return {
+                success: false,
+                message: `AI增强自动化执行失败: ${error.message}`,
+                error: error.toString()
+            };
+        }
+    }
+
+    /**
      * 执行Python自动化工作流
      * @param {Array} workflow - 工作流步骤数组
      * @param {Object} options - 选项
@@ -90,20 +134,27 @@ class PythonAutomationBridge {
         return new Promise((resolve, reject) => {
             const python = spawn(pythonCmd, args, {
                 stdio: ['pipe', 'pipe', 'pipe'],
-                cwd: __dirname
+                cwd: __dirname,
+                env: {
+                    ...process.env,
+                    PYTHONIOENCODING: 'utf-8',
+                    LANG: 'zh_CN.UTF-8',
+                    LC_ALL: 'zh_CN.UTF-8'
+                },
+                encoding: 'utf8'
             });
 
             let stdout = '';
             let stderr = '';
 
             python.stdout.on('data', (data) => {
-                const output = data.toString();
+                const output = data.toString('utf8');
                 stdout += output;
                 console.log('Python输出:', output.trim());
             });
 
             python.stderr.on('data', (data) => {
-                const error = data.toString();
+                const error = data.toString('utf8');
                 stderr += error;
                 console.error('Python错误:', error.trim());
             });
@@ -323,6 +374,35 @@ module.exports = {
         ];
         
         return await bridge.executeWorkflow(workflow, options);
+    },
+
+    // 便捷函数：执行AI增强命令
+    async executeAICommand(command, options = {}) {
+        const bridge = new PythonAutomationBridge();
+        return await bridge.executeCommand(command, {
+            aiApi: 'http://localhost:3000/api/ai',
+            ...options
+        });
+    },
+
+    // 便捷函数：智能搜索（自动识别网站）
+    async smartSearch(query, options = {}) {
+        const bridge = new PythonAutomationBridge();
+        const command = `搜索${query}`;
+        return await bridge.executeCommand(command, {
+            aiApi: 'http://localhost:3000/api/ai',
+            ...options
+        });
+    },
+
+    // 便捷函数：智能导航+搜索
+    async smartNavigateAndSearch(site, query, options = {}) {
+        const bridge = new PythonAutomationBridge();
+        const command = `在${site}搜索${query}`;
+        return await bridge.executeCommand(command, {
+            aiApi: 'http://localhost:3000/api/ai',
+            ...options
+        });
     },
 
     // 便捷函数：检查环境

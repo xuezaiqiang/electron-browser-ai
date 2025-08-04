@@ -245,25 +245,41 @@ class ElectronBrowserAI {
             this.updateMCPStatus(false);
         }
 
-        // 检查Python自动化环境 - 延迟执行以确保主进程IPC处理器已注册
+        // 检查Python自动化环境 - 简化版本
         setTimeout(async () => {
             try {
                 if (window.pythonAPI && window.pythonAPI.checkEnvironment) {
-                    const result = await window.pythonAPI.checkEnvironment();
-                    this.updatePythonStatus(result.success);
-                    if (result.success) {
-                        console.log('✅ Python环境检查通过');
-                    } else {
-                        console.warn('⚠️ Python环境检查失败:', result.message);
+                    console.log('🔍 开始检查Python环境...');
+                    
+                    // 简单重试机制
+                    for (let i = 0; i < 3; i++) {
+                        try {
+                            const result = await window.pythonAPI.checkEnvironment();
+                            this.updatePythonStatus(result.success);
+                            if (result.success) {
+                                console.log('✅ Python环境检查通过');
+                            } else {
+                                console.warn('⚠️ Python环境检查失败:', result.message);
+                            }
+                            break;
+                        } catch (error) {
+                            if (i < 2 && error.message.includes('No handler registered')) {
+                                console.warn('⚠️ IPC处理器未就绪，重试...');
+                                await new Promise(resolve => setTimeout(resolve, 3000));
+                                continue;
+                            }
+                            throw error;
+                        }
                     }
                 } else {
+                    console.warn('⚠️ Python API不可用');
                     this.updatePythonStatus(false);
                 }
             } catch (error) {
                 console.warn('Python environment check failed:', error);
                 this.updatePythonStatus(false);
             }
-        }, 2000); // 延迟2秒执行
+        }, 12000); // 延迟12秒执行
     }
 
     // 更新AI状态

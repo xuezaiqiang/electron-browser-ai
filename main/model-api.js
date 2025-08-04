@@ -1,4 +1,5 @@
 const axios = require('axios');
+const https = require('https');
 
 class ModelAPI {
     constructor() {
@@ -13,6 +14,13 @@ class ModelAPI {
         };
         this.currentRequest = null;
         this.abortController = null;
+
+        // 创建HTTPS代理，忽略SSL证书错误（仅用于开发环境）
+        this.httpsAgent = new https.Agent({
+            rejectUnauthorized: false,
+            keepAlive: true,
+            timeout: 60000
+        });
     }
 
     // 设置模型配置
@@ -194,14 +202,16 @@ class ModelAPI {
                 this.currentRequest = axios.create({
                     baseURL: this.config.baseURL,
                     timeout: this.config.timeout,
-                    headers: headers
+                    headers: headers,
+                    httpsAgent: this.httpsAgent
                 });
 
                 console.log('Sending request to:', `${this.config.baseURL}${endpoint}`);
                 console.log('Request data size:', JSON.stringify(requestData).length, 'characters');
 
                 const response = await this.currentRequest.post(endpoint, requestData, {
-                    signal: this.abortController.signal
+                    signal: this.abortController.signal,
+                    httpsAgent: this.httpsAgent
                 });
                 console.log('Response received:', response.status);
 

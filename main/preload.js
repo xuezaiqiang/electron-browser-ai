@@ -79,7 +79,18 @@ contextBridge.exposeInMainWorld('pythonAPI', {
     searchBaidu: (query, options) => ipcRenderer.invoke('python-search-baidu', query, options),
 
     // 安装Python依赖
-    installDependencies: () => ipcRenderer.invoke('python-install-dependencies')
+    installDependencies: () => ipcRenderer.invoke('python-install-dependencies'),
+
+    // ==================== AI增强功能 ====================
+
+    // 执行AI增强命令
+    executeAICommand: (command, options) => ipcRenderer.invoke('python-execute-ai-command', command, options),
+
+    // 智能搜索
+    smartSearch: (query, options) => ipcRenderer.invoke('python-smart-search', query, options),
+
+    // 智能导航+搜索
+    smartNavigateAndSearch: (site, query, options) => ipcRenderer.invoke('python-smart-navigate-search', site, query, options)
 });
 
 // 监听来自主进程的消息
