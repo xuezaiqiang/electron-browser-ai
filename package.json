@@ -4,7 +4,7 @@
   "description": "基于Electron的浏览器应用，具有AI生成页面使用说明功能",
   "main": "main/main.js",
   "scripts": {
-    "start": "electron .",
+    "start": "chcp 65001 && set PYTHONIOENCODING=utf-8 && set LANG=zh_CN.UTF-8 && set LC_ALL=zh_CN.UTF-8 && electron .",
     "dev": "electron . --dev",
     "build": "electron-builder",
     "start:debug": "electron . --enable-logging --remote-debugging-port=9222"

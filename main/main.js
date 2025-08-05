@@ -1,56 +1,26 @@
-const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
-const path = require('path');
-const fs = require('fs');
-const ModelAPI = require('./model-api');
-
-// 设置控制台编码为UTF-8
+// 设置Windows控制台编码
 if (process.platform === 'win32') {
+    // 设置环境变量
     process.env.PYTHONIOENCODING = 'utf-8';
     process.env.LANG = 'zh_CN.UTF-8';
     process.env.LC_ALL = 'zh_CN.UTF-8';
 
-    // 修复控制台中文显示
-    const originalLog = console.log;
-    const originalError = console.error;
-    const originalWarn = console.warn;
-
-    console.log = function(...args) {
-        const message = args.map(arg => {
-            if (typeof arg === 'string') {
-                // 确保中文字符正确显示
-                return arg.replace(/[\u4e00-\u9fff]/g, (match) => {
-                    return Buffer.from(match, 'utf8').toString('utf8');
-                });
-            }
-            return arg;
-        });
-        originalLog.apply(console, message);
-    };
-
-    console.error = function(...args) {
-        const message = args.map(arg => {
-            if (typeof arg === 'string') {
-                return arg.replace(/[\u4e00-\u9fff]/g, (match) => {
-                    return Buffer.from(match, 'utf8').toString('utf8');
-                });
-            }
-            return arg;
-        });
-        originalError.apply(console, message);
-    };
-
-    console.warn = function(...args) {
-        const message = args.map(arg => {
-            if (typeof arg === 'string') {
-                return arg.replace(/[\u4e00-\u9fff]/g, (match) => {
-                    return Buffer.from(match, 'utf8').toString('utf8');
-                });
-            }
-            return arg;
-        });
-        originalWarn.apply(console, message);
-    };
+    // 尝试设置控制台代码页
+    try {
+        const { spawn } = require('child_process');
+        spawn('chcp', ['65001'], { stdio: 'ignore' });
+    } catch (error) {
+        // 忽略错误
+    }
 }
+
+// 现在导入其他模块
+const { app, BrowserWindow, ipcMain, dialog, nativeImage } = require('electron');
+const path = require('path');
+const fs = require('fs');
+const ModelAPI = require('./model-api');
+const WebViewController = require('./webview-controller');
+const IPCServer = require('./ipc-server');
 
 // 禁用GPU缓存以避免权限问题
 app.commandLine.appendSwitch('--disable-gpu-sandbox');
@@ -72,9 +42,7 @@ try {
     smartSearch = automationBridge.smartSearch;
     smartNavigateAndSearch = automationBridge.smartNavigateAndSearch;
 
-    console.log('✅ Python自动化桥接器导入成功');
-    console.log('✅ PythonAutomationBridge:', typeof PythonAutomationBridge);
-    console.log('✅ AI增强功能:', typeof executeAICommand);
+    console.log('\u2705 Python\u81ea\u52a8\u5316\u6865\u63a5\u5668\u5bfc\u5165\u6210\u529f');
 } catch (error) {
     console.error('❌ Python自动化桥接器导入失败:', error);
     // 创建占位符函数，避免应用崩溃
@@ -89,6 +57,8 @@ try {
 
 let mainWindow;
 let modelAPI;
+let webViewController;
+let ipcServer;
 // let mcpInterface; // 暂时注释掉MCP功能
 
 function createWindow() {
@@ -112,9 +82,21 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'));
 
     // 当窗口准备好时显示
-    mainWindow.once('ready-to-show', () => {
+    mainWindow.once('ready-to-show', async () => {
         mainWindow.show();
-        
+
+        // 初始化WebView控制器
+        webViewController = new WebViewController(mainWindow);
+
+        // 启动IPC服务器
+        try {
+            ipcServer = new IPCServer(3001);
+            ipcServer.setWebViewController(webViewController);
+            await ipcServer.start();
+        } catch (error) {
+            console.error('IPC服务器启动失败:', error);
+        }
+
         // 开发模式下打开开发者工具
         if (process.argv.includes('--dev')) {
             mainWindow.webContents.openDevTools();
@@ -133,10 +115,10 @@ function cleanupCache() {
         const cacheDir = path.join(app.getPath('userData'), 'GPUCache');
         if (fs.existsSync(cacheDir)) {
             fs.rmSync(cacheDir, { recursive: true, force: true });
-            console.log('✅ 缓存目录清理完成');
+    
         }
     } catch (error) {
-        console.log('⚠️ 缓存清理失败，忽略:', error.message);
+
     }
 }
 
@@ -174,11 +156,11 @@ app.on('activate', () => {
 let handlersRegistered = false;
 function registerIPCHandlers() {
     if (handlersRegistered) {
-        console.log('⚠️ IPC处理器已注册，跳过重复注册');
+
         return;
     }
 
-    console.log('🔧 注册IPC处理器...');
+
     handlersRegistered = true;
 
 // 处理页面数据提取请求
@@ -377,90 +359,16 @@ ipcMain.handle('get-available-models', async () => {
     }
 });
 
-// MCP相关的IPC处理 - 暂时注释掉
-
-/*
-// 执行点击操作
-ipcMain.handle('mcp-click', async (event, x, y, button = 'left') => {
-    try {
-        return await mcpInterface.click(x, y, button);
-    } catch (error) {
-        console.error('Error executing click:', error);
-        throw error;
-    }
-});
-
-// 获取窗口信息
-ipcMain.handle('mcp-get-window-info', async (event, windowTitle = null) => {
-    try {
-        return mcpInterface.getWindowInfo(windowTitle);
-    } catch (error) {
-        console.error('Error getting window info:', error);
-        throw error;
-    }
-});
-
-// 发送键盘输入
-ipcMain.handle('mcp-send-keys', async (event, keys) => {
-    try {
-        return await mcpInterface.sendKeys(keys);
-    } catch (error) {
-        console.error('Error sending keys:', error);
-        throw error;
-    }
-});
-
-// 获取鼠标位置
-ipcMain.handle('mcp-get-cursor-position', async () => {
-    try {
-        return mcpInterface.getCursorPosition();
-    } catch (error) {
-        console.error('Error getting cursor position:', error);
-        throw error;
-    }
-});
-
-// 检查MCP是否可用
+// MCP功能暂时不可用的占位符
 ipcMain.handle('mcp-is-available', async () => {
-    try {
-        return { available: mcpInterface.isAvailable() };
-    } catch (error) {
-        console.error('Error checking MCP availability:', error);
-        return { available: false, error: error.message };
-    }
+    return { available: false, error: 'MCP功能暂时不可用' };
 });
 
-// ==================== 在函数外部注册Python IPC处理器（确保注册） ====================
-
-// 检查Python环境
-if (!ipcMain.listenerCount('python-check-environment')) {
-    ipcMain.handle('python-check-environment', async () => {
-        try {
-            console.log('🔍 处理Python环境检查请求...');
-
-            // 检查函数是否可用
-            if (!checkEnvironment || typeof checkEnvironment !== 'function') {
-                throw new Error('checkEnvironment函数不可用');
-            }
-
-            const result = await checkEnvironment();
-            console.log('✅ Python环境检查完成:', result);
-            return result || { success: false, error: '未知错误' };
-        } catch (error) {
-            console.error('Python环境检查失败:', error);
-            return {
-                success: false,
-                message: `Python环境检查失败: ${error.message}`,
-                error: error.toString()
-            };
-        }
-    });
-    console.log('✅ Python环境检查处理器已注册');
-}
+// Python IPC处理器将在下方统一注册
 
 
 // Python IPC处理器注册
-console.log('🔧 注册所有Python IPC处理器...');
+
 
 // 清理所有现有的处理器
 const pythonHandlers = [
@@ -481,8 +389,8 @@ pythonHandlers.forEach(handler => {
 // 1. Python环境检查
 ipcMain.handle('python-check-environment', async () => {
     try {
-        console.log('🔍 处理Python环境检查请求...');
-        
+
+
         if (!checkEnvironment || typeof checkEnvironment !== 'function') {
             return {
                 success: false,
@@ -490,9 +398,9 @@ ipcMain.handle('python-check-environment', async () => {
                 error: 'Function not available'
             };
         }
-        
+
         const result = await checkEnvironment();
-        console.log('✅ Python环境检查完成');
+
         return result || { success: false, error: '未知错误' };
     } catch (error) {
         console.error('Python环境检查失败:', error);
@@ -507,18 +415,18 @@ ipcMain.handle('python-check-environment', async () => {
 // 2. AI增强命令执行
 ipcMain.handle('python-execute-ai-command', async (event, command, options = {}) => {
     try {
-        console.log('🤖 执行AI增强命令:', command);
-        
+
+
         if (!executeAICommand || typeof executeAICommand !== 'function') {
             throw new Error('executeAICommand函数不可用');
         }
-        
+
         const result = await executeAICommand(command, {
             aiApi: 'http://localhost:3000/api/ai',
             ...options
         });
-        
-        console.log('✅ AI增强命令执行完成');
+
+
         return result || { success: false, error: '未知错误' };
     } catch (error) {
         console.error('AI增强命令执行失败:', error);
@@ -665,5 +573,87 @@ ipcMain.handle('python-install-dependencies', async () => {
     }
 });
 
-console.log('🎉 所有Python IPC处理器注册完成！');
-console.log('📋 已注册的处理器:', pythonHandlers);
+
+
+// WebView控制IPC处理器
+
+// WebView导航
+ipcMain.handle('webview-navigate', async (event, url) => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.navigate(url);
+    } catch (error) {
+        console.error('WebView导航失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// WebView搜索
+ipcMain.handle('webview-search', async (event, query, site = 'baidu') => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.search(query, site);
+    } catch (error) {
+        console.error('WebView搜索失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// WebView点击元素
+ipcMain.handle('webview-click', async (event, selector) => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.clickElement(selector);
+    } catch (error) {
+        console.error('WebView点击失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// WebView输入文本
+ipcMain.handle('webview-input', async (event, selector, text) => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.inputText(selector, text);
+    } catch (error) {
+        console.error('WebView输入失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// WebView执行脚本
+ipcMain.handle('webview-execute-script', async (event, script) => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.executeScript(script);
+    } catch (error) {
+        console.error('WebView脚本执行失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+// WebView获取页面信息
+ipcMain.handle('webview-get-page-info', async (event) => {
+    try {
+        if (!webViewController) {
+            return { success: false, error: 'WebView控制器未初始化' };
+        }
+        return await webViewController.getPageInfo();
+    } catch (error) {
+        console.error('获取页面信息失败:', error);
+        return { success: false, error: error.message };
+    }
+});
+
+
+}

@@ -32,17 +32,14 @@ class PythonAutomationBridge {
      */
     async executeCommand(command, options = {}) {
         try {
-            console.log('🤖 执行AI增强命令:', command);
+            // 使用WebView自动化脚本而不是独立浏览器
+            const webviewScriptPath = path.join(__dirname, 'webview_automation.py');
 
             // 构建Python命令
             const args = [
-                this.scriptPath,
+                webviewScriptPath,
                 '--command', command
             ];
-
-            if (options.headless) {
-                args.push('--headless');
-            }
 
             if (options.aiApi) {
                 args.push('--ai-api', options.aiApi);
@@ -52,17 +49,20 @@ class PythonAutomationBridge {
                 args.push('--no-ai');
             }
 
-            console.log('🐍 启动AI增强Python自动化:', this.pythonPath, args.join(' '));
+            // 添加IPC端口参数
+            args.push('--ipc-port', '3001');
+
+
 
             // 执行Python脚本
             const result = await this.runPythonScript(args);
             return result;
 
         } catch (error) {
-            console.error('AI增强自动化执行失败:', error);
+            console.error('WebView自动化执行失败:', error);
             return {
                 success: false,
-                message: `AI增强自动化执行失败: ${error.message}`,
+                message: `WebView自动化执行失败: ${error.message}`,
                 error: error.toString()
             };
         }
@@ -150,13 +150,13 @@ class PythonAutomationBridge {
             python.stdout.on('data', (data) => {
                 const output = data.toString('utf8');
                 stdout += output;
-                console.log('Python输出:', output.trim());
+                const cleanOutput = output.trim();
             });
 
             python.stderr.on('data', (data) => {
                 const error = data.toString('utf8');
                 stderr += error;
-                console.error('Python错误:', error.trim());
+                const cleanError = error.trim();
             });
 
             python.on('close', (code) => {

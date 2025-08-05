@@ -86,6 +86,26 @@ contextBridge.exposeInMainWorld('pythonAPI', {
     // 执行AI增强命令
     executeAICommand: (command, options) => ipcRenderer.invoke('python-execute-ai-command', command, options),
 
+    // ==================== WebView控制功能 ====================
+
+    // WebView导航
+    webviewNavigate: (url) => ipcRenderer.invoke('webview-navigate', url),
+
+    // WebView搜索
+    webviewSearch: (query, site) => ipcRenderer.invoke('webview-search', query, site),
+
+    // WebView点击元素
+    webviewClick: (selector) => ipcRenderer.invoke('webview-click', selector),
+
+    // WebView输入文本
+    webviewInput: (selector, text) => ipcRenderer.invoke('webview-input', selector, text),
+
+    // WebView执行脚本
+    webviewExecuteScript: (script) => ipcRenderer.invoke('webview-execute-script', script),
+
+    // WebView获取页面信息
+    webviewGetPageInfo: () => ipcRenderer.invoke('webview-get-page-info'),
+
     // 智能搜索
     smartSearch: (query, options) => ipcRenderer.invoke('python-smart-search', query, options),
 
