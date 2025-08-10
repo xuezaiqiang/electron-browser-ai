@@ -32,12 +32,23 @@ class PythonAutomationBridge {
      */
     async executeCommand(command, options = {}) {
         try {
-            // 使用WebView自动化脚本而不是独立浏览器
-            const webviewScriptPath = path.join(__dirname, 'webview_automation.py');
+            // 优先使用增强版WebView自动化脚本
+            const enhancedScriptPath = path.join(__dirname, 'enhanced_webview_automation.py');
+            const fallbackScriptPath = path.join(__dirname, 'webview_automation.py');
+
+            // 检查增强版脚本是否存在
+            let scriptPath = enhancedScriptPath;
+            try {
+                require('fs').accessSync(enhancedScriptPath);
+                console.log('🚀 使用增强版AI自动化脚本');
+            } catch (error) {
+                scriptPath = fallbackScriptPath;
+                console.log('🔄 回退到基础WebView自动化脚本');
+            }
 
             // 构建Python命令
             const args = [
-                webviewScriptPath,
+                scriptPath,
                 '--command', command
             ];
 
@@ -45,9 +56,7 @@ class PythonAutomationBridge {
                 args.push('--ai-api', options.aiApi);
             }
 
-            if (options.noAi) {
-                args.push('--no-ai');
-            }
+
 
             // 添加IPC端口参数
             args.push('--ipc-port', '3001');

@@ -21,10 +21,31 @@ const fs = require('fs');
 const ModelAPI = require('./model-api');
 const WebViewController = require('./webview-controller');
 const IPCServer = require('./ipc-server');
+const AIServer = require('./ai-server');
 
 // 禁用GPU缓存以避免权限问题
 app.commandLine.appendSwitch('--disable-gpu-sandbox');
 app.commandLine.appendSwitch('--disable-software-rasterizer');
+
+// 添加WebView相关的命令行开关 - 简化配置避免冲突
+app.commandLine.appendSwitch('--enable-webview-tag');
+app.commandLine.appendSwitch('--disable-web-security');
+app.commandLine.appendSwitch('--no-sandbox');
+app.commandLine.appendSwitch('--disable-features', 'OutOfBlinkCors');
+app.commandLine.appendSwitch('--disable-site-isolation-trials');
+
+// 内存管理
+app.commandLine.appendSwitch('--max-old-space-size', '4096');
+app.commandLine.appendSwitch('--js-flags', '--max-old-space-size=4096');
+
+// 处理未捕获的异常
+process.on('uncaughtException', (error) => {
+    console.error('未捕获的异常:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('未处理的Promise拒绝:', reason);
+});
 app.commandLine.appendSwitch('--disable-gpu');
 app.commandLine.appendSwitch('--no-sandbox');
 // const MCPInterface = require('./mcp'); // 暂时注释掉MCP功能
@@ -59,6 +80,7 @@ let mainWindow;
 let modelAPI;
 let webViewController;
 let ipcServer;
+let aiServer;
 // let mcpInterface; // 暂时注释掉MCP功能
 
 function createWindow() {
@@ -71,8 +93,12 @@ function createWindow() {
             contextIsolation: true,
             enableRemoteModule: false,
             preload: path.join(__dirname, 'preload.js'),
-            webSecurity: false, // 允许加载本地资源，生产环境需要谨慎使用
-            webviewTag: true // 启用webview标签支持
+            webSecurity: false,
+            webviewTag: true,
+            sandbox: false,
+            partition: 'persist:main',
+            spellcheck: false,
+            defaultEncoding: 'UTF-8'
         },
         icon: path.join(__dirname, '../assets/icon.png'), // 如果有图标的话
         show: false // 先不显示，等加载完成后再显示
@@ -93,15 +119,67 @@ function createWindow() {
             ipcServer = new IPCServer(3001);
             ipcServer.setWebViewController(webViewController);
             await ipcServer.start();
+            console.log('✅ IPC服务器启动成功');
         } catch (error) {
             console.error('IPC服务器启动失败:', error);
         }
 
-        // 开发模式下打开开发者工具
-        if (process.argv.includes('--dev')) {
-            mainWindow.webContents.openDevTools();
+        // 启动AI服务器
+        try {
+            aiServer = new AIServer(3000);
+            await aiServer.start();
+            console.log('✅ AI服务器启动成功');
+        } catch (error) {
+            console.error('AI服务器启动失败:', error);
         }
+
+        // 定期清理内存
+        setInterval(() => {
+            if (global.gc) {
+                global.gc();
+                console.log('执行垃圾回收');
+            }
+        }, 300000); // 每5分钟清理一次
     });
+
+    // 阻止所有新窗口创建以避免崩溃
+    mainWindow.webContents.setWindowOpenHandler(({ url, frameName, features, disposition }) => {
+        console.log('阻止新窗口打开:', { url, frameName, features, disposition });
+        return { action: 'deny' };
+    });
+
+    // 处理WebView的新窗口事件
+    mainWindow.webContents.on('new-window', (event, navigationUrl, frameName, disposition, options) => {
+        console.log('主窗口阻止新窗口:', { navigationUrl, frameName, disposition });
+        event.preventDefault();
+    });
+
+    // 阻止所有子窗口和弹窗
+    mainWindow.webContents.on('did-create-window', (childWindow) => {
+        console.log('检测到子窗口创建，立即关闭');
+        childWindow.destroy();
+    });
+
+    // 简化的错误处理
+    mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+        console.error('页面加载失败:', errorCode, errorDescription, validatedURL);
+    });
+
+    // 处理渲染进程崩溃
+    mainWindow.webContents.on('render-process-gone', (event, details) => {
+        console.error('渲染进程崩溃:', details);
+        // 不自动重启，让用户手动处理
+    });
+
+    // 处理子进程崩溃
+    mainWindow.webContents.on('child-process-gone', (event, details) => {
+        console.error('子进程崩溃:', details);
+    });
+
+    // 开发模式下打开开发者工具
+    if (process.argv.includes('--dev')) {
+        mainWindow.webContents.openDevTools();
+    }
 
     // 当窗口被关闭时
     mainWindow.on('closed', () => {
@@ -150,6 +228,31 @@ app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
         createWindow();
     }
+});
+
+// 应用退出前清理
+app.on('before-quit', async () => {
+    console.log('🔄 应用退出前清理...');
+
+    // 停止AI服务器
+    if (aiServer) {
+        try {
+            await aiServer.stop();
+        } catch (error) {
+            console.error('停止AI服务器失败:', error);
+        }
+    }
+
+    // 停止IPC服务器
+    if (ipcServer) {
+        try {
+            await ipcServer.stop();
+        } catch (error) {
+            console.error('停止IPC服务器失败:', error);
+        }
+    }
+
+    console.log('✅ 清理完成');
 });
 
 // IPC 通信处理函数

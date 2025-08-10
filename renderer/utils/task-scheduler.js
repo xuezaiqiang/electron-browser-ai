@@ -15,6 +15,9 @@ class TaskScheduler {
         // 从本地存储恢复任务
         this.loadTasksFromStorage();
 
+        // 立即清理过期任务
+        this.cleanupCompletedTasks();
+
         // 定期检查任务状态
         this.startStatusChecker();
     }
@@ -210,6 +213,22 @@ class TaskScheduler {
             return;
         }
 
+        // 防止重复执行：检查是否已有相同任务在执行
+        const runningTasks = Array.from(this.tasks.values()).filter(t => t.status === 'running');
+        const duplicateRunning = runningTasks.find(t =>
+            t.id !== task.id &&
+            t.originalText === task.originalText &&
+            t.action === task.action
+        );
+
+        if (duplicateRunning) {
+            task.status = 'cancelled';
+            task.error = '相同任务正在执行中';
+            this.saveTasksToStorage();
+            this.notifyListeners('taskCancelled', task);
+            return;
+        }
+
         try {
             task.status = 'running';
             task.executedAt = new Date();
@@ -240,12 +259,12 @@ class TaskScheduler {
 
             task.status = 'completed';
             task.result = '任务执行成功';
-            console.log(`任务执行完成: ${task.originalText}`);
+            task.executedAt = new Date(); // 确保设置执行完成时间
 
         } catch (error) {
             task.status = 'failed';
             task.error = error.message;
-            console.error(`任务执行失败: ${task.originalText}`, error);
+            task.executedAt = new Date(); // 确保设置执行失败时间
         }
 
         // 清理定时器
@@ -978,17 +997,25 @@ class TaskScheduler {
     // 清理已完成的任务
     cleanupCompletedTasks() {
         const toDelete = [];
+        const now = Date.now();
+
         for (const [id, task] of this.tasks) {
-            if (task.status === 'completed' || task.status === 'failed') {
-                const age = Date.now() - task.executedAt?.getTime();
-                if (age > 24 * 60 * 60 * 1000) { // 24小时后清理
-                    toDelete.push(id);
+            if (task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled') {
+                const executedTime = task.executedAt?.getTime() || task.createdAt?.getTime();
+                if (executedTime) {
+                    const age = now - executedTime;
+                    // 1小时后清理已完成/失败/取消的任务
+                    if (age > 60 * 60 * 1000) {
+                        toDelete.push(id);
+                    }
                 }
             }
         }
 
-        toDelete.forEach(id => this.tasks.delete(id));
-        this.saveTasksToStorage();
+        if (toDelete.length > 0) {
+            toDelete.forEach(id => this.tasks.delete(id));
+            this.saveTasksToStorage();
+        }
     }
 
     // 保存任务到本地存储
@@ -1015,6 +1042,8 @@ class TaskScheduler {
             const data = localStorage.getItem('aiChatTasks');
             if (data) {
                 const tasksData = JSON.parse(data);
+                const now = new Date();
+
                 for (const [id, taskData] of tasksData) {
                     const task = {
                         ...taskData,
@@ -1025,11 +1054,22 @@ class TaskScheduler {
 
                     this.tasks.set(id, task);
 
-                    // 重新调度待执行的任务
+                    // 只重新调度未来的待执行任务
                     if (task.status === 'pending') {
-                        this.scheduleTask(task);
+                        // 检查任务时间是否已过期
+                        if (task.scheduledTime > now) {
+                            this.scheduleTask(task);
+                        } else {
+                            // 过期的待执行任务标记为失败
+                            task.status = 'failed';
+                            task.error = '任务已过期';
+                            task.executedAt = now;
+                        }
                     }
                 }
+
+                // 保存更新后的任务状态
+                this.saveTasksToStorage();
             }
         } catch (error) {
             console.error('加载任务失败:', error);
@@ -1038,9 +1078,10 @@ class TaskScheduler {
 
     // 开始状态检查器
     startStatusChecker() {
+        // 每10分钟检查一次，及时清理已完成的任务
         setInterval(() => {
             this.cleanupCompletedTasks();
-        }, 60 * 60 * 1000); // 每小时检查一次
+        }, 10 * 60 * 1000);
     }
 
     // 添加事件监听器

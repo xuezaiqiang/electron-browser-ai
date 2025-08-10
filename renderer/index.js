@@ -21,12 +21,17 @@ class ElectronBrowserAI {
 
     // 初始化AI对话功能
     initializeAIChat() {
-        // 等待DOM完全加载后再初始化AI对话管理器
-        if (window.AIChatManager) {
-            this.aiChatManager = new AIChatManager();
-            window.aiChatManager = this.aiChatManager; // 全局引用，供任务调度器使用
-        } else {
-            console.warn('AIChatManager not loaded yet');
+        // 简化初始化，避免无限递归
+        try {
+            if (window.AIChatManager && window.NLPParser && window.TaskScheduler) {
+                this.aiChatManager = new AIChatManager();
+                window.aiChatManager = this.aiChatManager; // 全局引用，供任务调度器使用
+                console.log('✅ AI聊天管理器初始化成功');
+            } else {
+                console.warn('⚠️ AI聊天依赖未完全加载，跳过初始化');
+            }
+        } catch (error) {
+            console.error('❌ AI聊天管理器初始化失败:', error);
         }
     }
 
@@ -36,6 +41,7 @@ class ElectronBrowserAI {
         this.urlInput = document.getElementById('url-input');
         this.goBtn = document.getElementById('go-btn');
         this.refreshBtn = document.getElementById('refresh-btn');
+        this.resetWebviewBtn = document.getElementById('reset-webview-btn');
         this.statusText = document.getElementById('status-text');
         this.aiStatus = document.getElementById('ai-status');
         this.mcpStatus = document.getElementById('mcp-status');
@@ -61,6 +67,7 @@ class ElectronBrowserAI {
         // 地址栏事件
         this.goBtn.addEventListener('click', () => this.navigateToUrl());
         this.refreshBtn.addEventListener('click', () => this.refreshPage());
+        this.resetWebviewBtn.addEventListener('click', () => this.manualRecoverWebView());
         this.urlInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 this.navigateToUrl();
@@ -144,6 +151,11 @@ class ElectronBrowserAI {
             try {
                 this.currentUrl = this.webview.getURL();
                 this.urlInput.value = this.currentUrl;
+
+                // 页面加载完成后注入弹窗拦截脚本
+                setTimeout(() => {
+                    this.injectPopupBlocker();
+                }, 1000);
             } catch (error) {
                 console.warn('Failed to get webview URL:', error);
             }
@@ -161,10 +173,39 @@ class ElectronBrowserAI {
             }
         });
 
+        // 处理新窗口事件 - 阻止所有弹窗以避免崩溃
         this.webview.addEventListener('new-window', (event) => {
-            // 在新窗口中打开链接
+            console.log('阻止新窗口打开:', event.url, event.frameName, event.disposition);
             event.preventDefault();
-            this.navigateToUrl(event.url);
+            event.stopPropagation();
+            // 不导航到新URL，直接阻止弹窗
+            this.showNotification('已阻止弹窗窗口，避免崩溃', 'info');
+        });
+
+        // 处理WebView内部的弹窗拦截
+        this.webview.addEventListener('dom-ready', () => {
+            // 注入弹窗拦截脚本
+            this.injectPopupBlocker();
+
+            // 检查并修正URL
+            this.checkAndFixWebViewURL();
+        });
+
+        // 处理will-navigate事件
+        this.webview.addEventListener('will-navigate', (event) => {
+            console.log('页面即将导航:', event.url);
+            // 允许正常导航，但记录日志
+        });
+
+        // 处理did-navigate事件
+        this.webview.addEventListener('did-navigate', (event) => {
+            console.log('页面已导航:', event.url);
+            try {
+                this.currentUrl = event.url;
+                this.urlInput.value = event.url;
+            } catch (error) {
+                console.warn('更新URL失败:', error);
+            }
         });
 
         // 处理webview加载错误
@@ -174,6 +215,265 @@ class ElectronBrowserAI {
                 this.showNotification(`页面加载失败: ${event.errorDescription}`, 'error');
             }
         });
+
+        // 处理WebView崩溃 - 智能恢复机制
+        this.webview.addEventListener('crashed', () => {
+            console.error('WebView崩溃');
+            this.statusText.textContent = 'WebView崩溃，正在尝试恢复...';
+            this.showNotification('WebView崩溃，正在尝试恢复...', 'error');
+
+            // 智能恢复：只在短时间内没有频繁崩溃时才自动恢复
+            this.handleWebViewCrash();
+        });
+
+        // 处理render-process-gone事件（新的崩溃事件）
+        this.webview.addEventListener('render-process-gone', (event) => {
+            console.error('WebView渲染进程终止:', event.details);
+            this.statusText.textContent = 'WebView进程终止，正在尝试恢复...';
+            this.showNotification('WebView进程终止，正在尝试恢复...', 'error');
+
+            // 智能恢复
+            this.handleWebViewCrash();
+        });
+
+        // 处理WebView无响应
+        this.webview.addEventListener('unresponsive', () => {
+            console.warn('WebView无响应');
+            this.statusText.textContent = 'WebView无响应';
+            this.showNotification('WebView无响应，请稍候...', 'warning');
+        });
+
+        // 处理WebView恢复响应
+        this.webview.addEventListener('responsive', () => {
+            console.log('WebView恢复响应');
+            this.statusText.textContent = '已恢复响应';
+        });
+
+        // 简化的权限处理 - 拒绝所有权限请求以避免冲突
+        this.webview.addEventListener('permission-request', (event) => {
+            console.log('权限请求:', event.permission);
+            // 拒绝所有权限请求以避免崩溃
+            event.request.deny();
+        });
+
+        // 处理WebView的插件崩溃
+        this.webview.addEventListener('plugin-crashed', (event) => {
+            console.error('WebView插件崩溃:', event.name, event.version);
+            this.statusText.textContent = 'WebView插件崩溃';
+            this.showNotification('WebView插件崩溃，请刷新页面', 'warning');
+        });
+
+        // 处理WebView的GPU进程崩溃
+        this.webview.addEventListener('gpu-crashed', () => {
+            console.error('WebView GPU进程崩溃');
+            this.statusText.textContent = 'WebView GPU崩溃';
+            this.showNotification('WebView GPU崩溃，请刷新页面', 'warning');
+        });
+
+        // 处理WebView的媒体开始播放
+        this.webview.addEventListener('media-started-playing', () => {
+            console.log('WebView媒体开始播放');
+        });
+
+        // 处理WebView的媒体暂停
+        this.webview.addEventListener('media-paused', () => {
+            console.log('WebView媒体已暂停');
+        });
+
+        // 处理WebView的证书错误
+        this.webview.addEventListener('certificate-error', (event) => {
+            console.warn('WebView证书错误:', event.url, event.error);
+            // 忽略证书错误以避免阻塞
+            event.preventDefault();
+        });
+
+        // 定期检查WebView状态
+        this.webviewHealthCheck = setInterval(() => {
+            this.checkWebViewHealth();
+        }, 30000); // 每30秒检查一次
+    }
+
+    // WebView健康检查
+    checkWebViewHealth() {
+        if (!this.webview) return;
+
+        try {
+            // 检查WebView是否还存在于DOM中
+            if (!document.contains(this.webview)) {
+                console.error('WebView已从DOM中移除');
+                this.statusText.textContent = 'WebView已断开';
+                return;
+            }
+
+            // 检查WebView是否可以获取URL
+            const url = this.webview.getURL();
+            if (!url || url === 'about:blank') {
+                console.warn('WebView URL异常:', url);
+            }
+
+            // 更新状态
+            if (this.statusText.textContent === 'WebView已断开') {
+                this.statusText.textContent = '运行正常';
+            }
+        } catch (error) {
+            console.error('WebView健康检查失败:', error);
+            this.statusText.textContent = 'WebView状态异常';
+        }
+    }
+
+    // 注入弹窗拦截脚本
+    injectPopupBlocker() {
+        if (!this.webview) return;
+
+        try {
+            const blockScript = `
+                (function() {
+                    console.log('注入弹窗拦截脚本');
+
+                    // 重写window.open方法
+                    const originalOpen = window.open;
+                    window.open = function(url, name, features) {
+                        console.log('阻止window.open调用:', url, name, features);
+                        return null;
+                    };
+
+                    // 重写showModalDialog方法
+                    if (window.showModalDialog) {
+                        window.showModalDialog = function() {
+                            console.log('阻止showModalDialog调用');
+                            return null;
+                        };
+                    }
+
+                    // 阻止alert, confirm, prompt
+                    window.alert = function(message) {
+                        console.log('阻止alert:', message);
+                        return;
+                    };
+
+                    window.confirm = function(message) {
+                        console.log('阻止confirm:', message);
+                        return false;
+                    };
+
+                    window.prompt = function(message, defaultText) {
+                        console.log('阻止prompt:', message);
+                        return null;
+                    };
+
+                    // 监听并阻止beforeunload事件
+                    window.addEventListener('beforeunload', function(e) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                        return '';
+                    }, true);
+
+                    console.log('弹窗拦截脚本注入完成');
+                })();
+            `;
+
+            this.webview.executeJavaScript(blockScript)
+                .then(() => {
+                    console.log('弹窗拦截脚本注入成功');
+                })
+                .catch((error) => {
+                    console.warn('弹窗拦截脚本注入失败:', error);
+                });
+        } catch (error) {
+            console.error('注入弹窗拦截脚本时出错:', error);
+        }
+    }
+
+    // 检查并修正WebView URL
+    checkAndFixWebViewURL() {
+        if (!this.webview) return;
+
+        try {
+            const currentUrl = this.webview.getURL();
+            console.log('当前WebView URL:', currentUrl);
+
+            // 如果URL不正确，重新导航到百度
+            if (currentUrl && (currentUrl.includes('baobao.com') || currentUrl === 'about:blank')) {
+                console.log('检测到错误URL，重新导航到百度');
+                this.navigateToUrl('https://www.baidu.com');
+            }
+        } catch (error) {
+            console.warn('检查WebView URL失败:', error);
+        }
+    }
+
+    // 智能崩溃处理
+    handleWebViewCrash() {
+        const now = Date.now();
+
+        // 初始化崩溃记录
+        if (!this.crashHistory) {
+            this.crashHistory = [];
+        }
+
+        // 记录崩溃时间
+        this.crashHistory.push(now);
+
+        // 只保留最近5分钟的崩溃记录
+        this.crashHistory = this.crashHistory.filter(time => now - time < 300000);
+
+        // 如果5分钟内崩溃超过3次，停止自动恢复
+        if (this.crashHistory.length >= 3) {
+            console.error('WebView频繁崩溃，停止自动恢复');
+            this.statusText.textContent = 'WebView频繁崩溃，请手动重启应用';
+            this.showNotification('WebView频繁崩溃，请手动重启应用', 'error');
+            return;
+        }
+
+        // 延迟恢复，避免立即重新崩溃
+        setTimeout(() => {
+            this.manualRecoverWebView();
+        }, 3000);
+    }
+
+    // WebView手动恢复方法（仅在用户手动触发时使用）
+    manualRecoverWebView() {
+        console.log('手动恢复WebView...');
+
+        // 清理健康检查定时器
+        if (this.webviewHealthCheck) {
+            clearInterval(this.webviewHealthCheck);
+        }
+
+        // 保存当前URL
+        let currentUrl = 'https://www.baidu.com';
+        try {
+            currentUrl = this.webview.getURL() || currentUrl;
+        } catch (error) {
+            console.warn('无法获取当前URL:', error);
+        }
+
+        try {
+            // 停止当前加载
+            this.webview.stop();
+
+            // 等待一下再重新加载
+            setTimeout(() => {
+                try {
+                    this.webview.reload();
+                    this.statusText.textContent = 'WebView已重新加载';
+                    this.showNotification('WebView已重新加载', 'success');
+
+                    // 重新启动健康检查
+                    this.webviewHealthCheck = setInterval(() => {
+                        this.checkWebViewHealth();
+                    }, 30000);
+                } catch (error) {
+                    console.error('重新加载失败:', error);
+                    this.statusText.textContent = 'WebView重新加载失败';
+                    this.showNotification('WebView重新加载失败，请重启应用', 'error');
+                }
+            }, 1000);
+        } catch (error) {
+            console.error('停止WebView失败:', error);
+            this.statusText.textContent = 'WebView恢复失败';
+            this.showNotification('WebView恢复失败，请重启应用', 'error');
+        }
     }
 
     // 导航到指定URL
@@ -213,7 +513,13 @@ class ElectronBrowserAI {
     // 刷新页面
     refreshPage() {
         if (this.webview) {
-            this.webview.reload();
+            try {
+                this.webview.reload();
+                this.statusText.textContent = '正在刷新...';
+            } catch (error) {
+                console.error('刷新失败:', error);
+                this.manualRecoverWebView();
+            }
         }
     }
 
@@ -336,9 +642,14 @@ class ElectronBrowserAI {
     // 显示AI智能助手侧边栏
     showAIChat() {
         if (this.aiChatManager) {
-            this.aiChatManager.show();
+            try {
+                this.aiChatManager.show();
+            } catch (error) {
+                console.error('显示AI助手失败:', error);
+                this.showNotification('AI助手显示失败，请重试', 'error');
+            }
         } else {
-            this.showNotification('AI智能助手正在初始化，请稍后再试', 'warning');
+            this.showNotification('AI智能助手未初始化，请刷新页面重试', 'warning');
         }
     }
 
@@ -477,12 +788,20 @@ class ElectronBrowserAI {
         localStorage.setItem('electronBrowserAI_settings', JSON.stringify(settings));
 
         // 更新AI配置
-        window.aiAPI.setModelConfig({
-            apiType: settings.apiType,
-            baseURL: settings.modelUrl,
-            model: settings.modelName,
-            apiKey: settings.apiKey
-        });
+        if (window.aiAPI && window.aiAPI.setModelConfig) {
+            try {
+                window.aiAPI.setModelConfig({
+                    apiType: settings.apiType,
+                    baseURL: settings.modelUrl,
+                    model: settings.modelName,
+                    apiKey: settings.apiKey
+                });
+            } catch (error) {
+                console.error('设置AI配置失败:', error);
+            }
+        } else {
+            console.warn('AI API不可用，跳过配置设置');
+        }
 
         this.showNotification('设置已保存', 'success');
     }

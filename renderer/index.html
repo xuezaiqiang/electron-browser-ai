@@ -31,6 +31,7 @@
                 <input type="url" id="url-input" placeholder="输入网址或搜索内容..." value="https://www.baidu.com">
                 <button id="go-btn">访问</button>
                 <button id="refresh-btn">刷新</button>
+                <button id="reset-webview-btn" title="重置WebView">🔧</button>
             </div>
             
             <div id="browser-content">
@@ -38,8 +39,10 @@
                          src="https://www.baidu.com"
                          style="width: 100%; height: 100%;"
                          nodeintegration="false"
-                         webpreferences="contextIsolation=true,webSecurity=false"
-                         allowpopups>
+                         webpreferences="contextIsolation=true,webSecurity=false,sandbox=false,javascript=true,plugins=false,images=true"
+                         allowpopups="false"
+                         disablewebsecurity="true"
+                         partition="persist:webview">
                 </webview>
             </div>
         </div>

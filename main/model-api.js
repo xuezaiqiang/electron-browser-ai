@@ -321,7 +321,10 @@ class ModelAPI {
                     userMessage
                 ],
                 max_tokens: 2000,
-                temperature: 0.7
+                temperature: 0.7,
+                thinking: {
+                    type: "disabled"  // 关闭思考模式，模型直接回答问题
+                }
             };
 
             console.log('Request data prepared:', {
@@ -468,7 +471,10 @@ class ModelAPI {
                             role: "user",
                             content: "你好"
                         }
-                    ]
+                    ],
+                    thinking: {
+                        type: "disabled"  // 关闭思考模式
+                    }
                 };
 
                 const headers = this.buildHeaders();

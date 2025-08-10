@@ -176,30 +176,41 @@ class WebViewAutomation:
             if use_ai and self.ai_api_url:
                 # 使用AI分析命令意图
                 ai_prompt = f"""
-                请分析以下用户命令，并返回JSON格式的操作指令：
-                
+                请分析以下用户命令，并返回JSON格式的操作指令。请特别注意搜索场景的处理：
+
                 用户命令：{command}
-                
+
                 请返回以下格式的JSON：
                 {{
                     "action": "navigate|search|click|input",
-                    "target": "目标URL或搜索词或元素选择器",
-                    "site": "网站名称（如果是搜索）",
-                    "text": "要输入的文本（如果是输入操作）"
+                    "target": "搜索关键词或URL或选择器",
+                    "site": "网站标识（baidu/taobao/jd/google等）",
+                    "query": "搜索关键词（如果是搜索操作）",
+                    "confidence": "置信度(0-1)"
                 }}
-                
-                支持的操作：
-                - navigate: 导航到网站
-                - search: 搜索操作
-                - click: 点击元素
-                - input: 输入文本
+
+                网站识别规则：
+                - 淘宝/天猫 → taobao
+                - 京东 → jd
+                - 百度 → baidu
+                - 谷歌 → google
+                - 必应 → bing
+
+                搜索关键词提取示例：
+                - "打开淘宝搜索手机" → site: "taobao", query: "手机"
+                - "在京东买笔记本电脑" → site: "jd", query: "笔记本电脑"
+                - "百度一下今天天气" → site: "baidu", query: "今天天气"
+
+                请确保准确提取搜索关键词，去除网站名称和动作词。
                 """
-                
+
                 ai_result = self.send_to_ai(ai_prompt)
                 if ai_result.get("success"):
                     try:
                         ai_instruction = json.loads(ai_result["content"])
-                        return self._execute_ai_instruction(ai_instruction)
+                        # 验证AI返回的置信度
+                        if ai_instruction.get("confidence", 0) > 0.7:
+                            return self._execute_ai_instruction(ai_instruction)
                     except json.JSONDecodeError:
                         pass
             
@@ -216,14 +227,14 @@ class WebViewAutomation:
     def _execute_ai_instruction(self, instruction: Dict[str, Any]) -> Dict[str, Any]:
         """执行AI分析的指令"""
         action = instruction.get("action")
-        
+
         if action == "navigate":
             return self.navigate(instruction.get("target"))
         elif action == "search":
-            return self.search(
-                instruction.get("target"),
-                instruction.get("site", "baidu")
-            )
+            # 优先使用AI提取的query，其次使用target
+            query = instruction.get("query") or instruction.get("target")
+            site = instruction.get("site", "baidu")
+            return self.search(query, site)
         elif action == "click":
             return self.click_element(instruction.get("target"))
         elif action == "input":
@@ -240,28 +251,15 @@ class WebViewAutomation:
     def _execute_rule_based_command(self, command: str) -> Dict[str, Any]:
         """基于规则分析并执行命令"""
         command_lower = command.lower()
-        
+
         # 搜索命令
         if '搜索' in command or 'search' in command_lower:
-            # 提取搜索关键词和网站
-            if '淘宝' in command:
-                site = 'taobao'
-            elif '百度' in command:
-                site = 'baidu'
-            else:
-                site = 'baidu'
-            
-            # 提取搜索词
-            search_match = re.search(r'搜索["""]?([^"""]+)["""]?', command)
-            if search_match:
-                query = search_match.group(1).strip()
-            else:
-                # 移除网站名称和动作词，剩下的作为搜索词
-                query = re.sub(r'(在|用|打开|访问)?(淘宝|百度|京东)?(搜索|查找)?', '', command).strip()
-            
+            # 智能提取搜索关键词和网站
+            site, query = self._extract_search_info(command)
+
             if not query:
                 return {"success": False, "message": "无法提取搜索关键词"}
-            
+
             return self.search(query, site)
         
         # 导航命令
@@ -291,6 +289,54 @@ class WebViewAutomation:
         
         else:
             return {"success": False, "message": f"无法理解命令: {command}"}
+
+    def _extract_search_info(self, command: str) -> tuple:
+        """智能提取搜索网站和关键词"""
+        # 网站检测模式
+        site_patterns = {
+            'taobao': ['淘宝', 'taobao', '天猫', 'tmall'],
+            'jd': ['京东', 'jd', '京东商城'],
+            'baidu': ['百度', 'baidu'],
+            'google': ['谷歌', 'google'],
+            'bing': ['必应', 'bing']
+        }
+
+        # 默认网站
+        detected_site = 'baidu'
+
+        # 检测网站
+        command_lower = command.lower()
+        for site, patterns in site_patterns.items():
+            for pattern in patterns:
+                if pattern in command_lower:
+                    detected_site = site
+                    break
+            if detected_site != 'baidu':
+                break
+
+        # 提取搜索关键词的多种模式
+        query_patterns = [
+            r'搜索["""]?([^"""]+?)["""]?(?:在|$)',  # "搜索手机"
+            r'(?:在|用|打开).*?搜索["""]?([^"""]+)["""]?',  # "在淘宝搜索手机"
+            r'(?:查找|找|买)["""]?([^"""]+)["""]?',  # "买手机"
+            r'(?:淘宝|百度|京东|谷歌|必应).*?["""]?([^"""]+?)["""]?(?:怎么样|价格|评价|$)',  # "淘宝手机"
+        ]
+
+        query = ""
+        for pattern in query_patterns:
+            match = re.search(pattern, command)
+            if match:
+                query = match.group(1).strip()
+                break
+
+        # 如果没有匹配到，使用更宽泛的提取
+        if not query:
+            # 移除网站名称和动作词，剩下的作为搜索词
+            cleaned = re.sub(r'(在|用|打开|访问|去|到)?(淘宝|百度|京东|谷歌|必应|天猫|京东商城)?(搜索|查找|找|买|看|要)?', '', command).strip()
+            # 移除标点符号
+            query = re.sub(r'[，。！？、；：""''（）【】《》]', '', cleaned).strip()
+
+        return detected_site, query
 
 def main():
     """主函数"""
